@@ -1549,11 +1549,19 @@ export class TransactionContext extends events.EventEmitter {
         let projDir = goPath + "/src/" + request.chaincodePath;
         debug("projDir: " + projDir);
 
-        // Compute the hash of the chaincode deployment parameters
-        let hash = sdk_util.GenerateParameterHash(request.chaincodePath, request.fcn, request.args);
+        let hash = null;
+		
+        if (request.chaincodeName != null) {
+            hash = request.chaincodeName;
+        }
+        else {
+            // Compute the hash of the chaincode deployment parameters
+            hash = sdk_util.GenerateParameterHash(request.chaincodePath, request.fcn, request.args);
 
-        // Compute the hash of the project directory contents
-        hash = sdk_util.GenerateDirectoryHash(goPath + "/src/", request.chaincodePath, hash);
+            // Compute the hash of the project directory contents
+            hash = sdk_util.GenerateDirectoryHash(goPath + "/src/", request.chaincodePath, hash);
+        }
+
         debug("hash: " + hash);
 
         // Compose the Dockerfile commands
