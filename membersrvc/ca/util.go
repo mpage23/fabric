@@ -1,29 +1,39 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package ca
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	crand "crypto/rand"
 	"errors"
 	"io"
 	"log"
 	mrand "math/rand"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
-	pb "github.com/hyperledger/fabric/membersrvc/protos"
+	"github.com/spf13/viper"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -76,17 +86,103 @@ func randomString(n int) string {
 	return string(b)
 }
 
+// GetConfigString returns a configuration string value for a given identifier.
+// Environment variables have preference over entries in the yaml file, whereby 'name' is
+// converted to
 //
-// MemberRoleToString converts a member role representation from int32 to a string,
-// according to the Role enum defined in ca.proto.
+//     "OBCCA_" + strings.Replace(strings.ToUpper('name'), ".", "_")
 //
-func MemberRoleToString(role pb.Role) (string, error) {
-	roleMap := pb.Role_name
+// for environment variables.
+//
+func GetConfigString(name string) string {
+	val := os.Getenv("OBCCA_"+strings.Replace(strings.ToUpper(name), ".", "_", -1))
+	if val == "" {
+		return viper.GetString(name)
+	}
+	
+	return val
+}
 
-	roleStr := roleMap[int32(role)]
-	if roleStr == "" {
-		return "", errors.New("Undefined user role passed.")
+// GetConfigInt returns a configuration integer value for a given identifier.
+// Environment variables have preference over entries in the yaml file, whereby 'name' is
+// converted to
+//
+//     "OBCCA_" + strings.Replace(strings.ToUpper('name'), ".", "_")
+//
+// for environment variables.
+//
+func GetConfigInt(name string) int {
+	val := os.Getenv("OBCCA_"+strings.Replace(strings.ToUpper(name), ".", "_", -1))
+	if val == "" {
+		return viper.GetInt(name)
+	}
+	
+	ival, _ := strconv.Atoi(val)
+	return ival
+}
+
+// PKCS5Pad adds a PKCS5 padding.
+//
+func PKCS5Pad(src []byte) []byte {
+	padding := aes.BlockSize - len(src)%aes.BlockSize
+	pad := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(src, pad...)
+}
+
+// PKCS5Unpad removes a PKCS5 padding.
+//
+func PKCS5Unpad(src []byte) []byte {
+	len := len(src)
+	unpad := int(src[len-1])
+	return src[:(len - unpad)]
+}
+
+// CBCEncrypt performs an AES CBC encryption.
+//
+func CBCEncrypt(key, s []byte) ([]byte, error) {
+	src := PKCS5Pad(s)
+
+	if len(src)%aes.BlockSize != 0 {
+		return nil, errors.New("plaintext length is not a multiple of the block size")
 	}
 
-	return roleStr, nil
+	blk, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	enc := make([]byte, aes.BlockSize+len(src))
+	iv := enc[:aes.BlockSize]
+	if _, err := io.ReadFull(crand.Reader, iv); err != nil {
+		return nil, err
+	}
+
+	mode := cipher.NewCBCEncrypter(blk, iv)
+	mode.CryptBlocks(enc[aes.BlockSize:], src)
+
+	return enc, nil
+}
+
+// CBCDecrypt performs an AES CBC decryption.
+//
+func CBCDecrypt(key, src []byte) ([]byte, error) {
+	blk, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(src) < aes.BlockSize {
+		return nil, errors.New("ciphertext too short")
+	}
+	iv := src[:aes.BlockSize]
+	src = src[aes.BlockSize:]
+
+	if len(src)%aes.BlockSize != 0 {
+		return nil, errors.New("ciphertext length is not a multiple of the block size")
+	}
+
+	mode := cipher.NewCBCDecrypter(blk, iv)
+	mode.CryptBlocks(src, src)
+
+	return PKCS5Unpad(src), nil
 }

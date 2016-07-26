@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package peer
@@ -19,48 +22,10 @@ package peer
 import (
 	"sync"
 
+	"github.com/spf13/viper"
+
 	pb "github.com/hyperledger/fabric/protos"
 )
-
-//-----------------------------------------------------------------------------
-//
-// Sync Handler
-//
-//-----------------------------------------------------------------------------
-
-type syncHandler struct {
-	sync.Mutex
-	correlationID uint64
-}
-
-func (sh *syncHandler) shouldHandle(correlationID uint64) bool {
-	return correlationID == sh.correlationID
-}
-
-//-----------------------------------------------------------------------------
-//
-// Sync Blocks Handler
-//
-//-----------------------------------------------------------------------------
-
-type syncBlocksRequestHandler struct {
-	syncHandler
-	channel chan *pb.SyncBlocks
-}
-
-func (sbh *syncBlocksRequestHandler) reset() {
-	if sbh.channel != nil {
-		close(sbh.channel)
-	}
-	sbh.channel = make(chan *pb.SyncBlocks, SyncBlocksChannelSize())
-	sbh.correlationID++
-}
-
-func newSyncBlocksRequestHandler() *syncBlocksRequestHandler {
-	sbh := &syncBlocksRequestHandler{}
-	sbh.reset()
-	return sbh
-}
 
 //-----------------------------------------------------------------------------
 //
@@ -69,26 +34,31 @@ func newSyncBlocksRequestHandler() *syncBlocksRequestHandler {
 //-----------------------------------------------------------------------------
 
 type syncStateSnapshotRequestHandler struct {
-	syncHandler
-	channel chan *pb.SyncStateSnapshot
+	sync.Mutex
+	correlationID uint64
+	channel       chan *pb.SyncStateSnapshot
 }
 
 func (srh *syncStateSnapshotRequestHandler) reset() {
-	if srh.channel != nil {
-		close(srh.channel)
-	}
-	srh.channel = make(chan *pb.SyncStateSnapshot, SyncStateSnapshotChannelSize())
+	close(srh.channel)
+	srh.channel = makeStateSnapshotChannel()
 	srh.correlationID++
+}
+
+func (srh *syncStateSnapshotRequestHandler) shouldHandle(syncStateSnapshot *pb.SyncStateSnapshot) bool {
+	return syncStateSnapshot.Request.CorrelationId == srh.correlationID
 }
 
 func (srh *syncStateSnapshotRequestHandler) createRequest() *pb.SyncStateSnapshotRequest {
 	return &pb.SyncStateSnapshotRequest{CorrelationId: srh.correlationID}
 }
 
+func makeStateSnapshotChannel() chan *pb.SyncStateSnapshot {
+	return make(chan *pb.SyncStateSnapshot, viper.GetInt("peer.sync.state.snapshot.channelSize"))
+}
+
 func newSyncStateSnapshotRequestHandler() *syncStateSnapshotRequestHandler {
-	srh := &syncStateSnapshotRequestHandler{}
-	srh.reset()
-	return srh
+	return &syncStateSnapshotRequestHandler{channel: makeStateSnapshotChannel()}
 }
 
 //-----------------------------------------------------------------------------
@@ -98,24 +68,23 @@ func newSyncStateSnapshotRequestHandler() *syncStateSnapshotRequestHandler {
 //-----------------------------------------------------------------------------
 
 type syncStateDeltasHandler struct {
-	syncHandler
+	sync.Mutex
 	channel chan *pb.SyncStateDeltas
 }
 
 func (ssdh *syncStateDeltasHandler) reset() {
-	if ssdh.channel != nil {
-		close(ssdh.channel)
-	}
-	ssdh.channel = make(chan *pb.SyncStateDeltas, SyncStateDeltasChannelSize())
-	ssdh.correlationID++
+	close(ssdh.channel)
+	ssdh.channel = makeSyncStateDeltasChannel()
 }
 
 func (ssdh *syncStateDeltasHandler) createRequest(syncBlockRange *pb.SyncBlockRange) *pb.SyncStateDeltasRequest {
 	return &pb.SyncStateDeltasRequest{Range: syncBlockRange}
 }
 
+func makeSyncStateDeltasChannel() chan *pb.SyncStateDeltas {
+	return make(chan *pb.SyncStateDeltas, viper.GetInt("peer.sync.state.deltas.channelSize"))
+}
+
 func newSyncStateDeltasHandler() *syncStateDeltasHandler {
-	ssdh := &syncStateDeltasHandler{}
-	ssdh.reset()
-	return ssdh
+	return &syncStateDeltasHandler{channel: makeSyncStateDeltasChannel()}
 }

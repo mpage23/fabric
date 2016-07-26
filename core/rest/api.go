@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package rest
@@ -19,14 +22,14 @@ package rest
 import (
 	"errors"
 	"fmt"
-	"google/protobuf"
 
 	"golang.org/x/net/context"
+
+	google_protobuf1 "google/protobuf"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
 	pb "github.com/hyperledger/fabric/protos"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -75,7 +78,7 @@ func NewOpenchainServerWithPeerInfo(peerServer PeerInfo) (*ServerOpenchain, erro
 
 // GetBlockchainInfo returns information about the blockchain ledger such as
 // height, current block hash, and previous block hash.
-func (s *ServerOpenchain) GetBlockchainInfo(ctx context.Context, e *google_protobuf.Empty) (*pb.BlockchainInfo, error) {
+func (s *ServerOpenchain) GetBlockchainInfo(ctx context.Context, e *google_protobuf1.Empty) (*pb.BlockchainInfo, error) {
 	blockchainInfo, err := s.ledger.GetBlockchainInfo()
 	if blockchainInfo.Height == 0 {
 		return nil, fmt.Errorf("No blocks in blockchain.")
@@ -106,13 +109,7 @@ func (s *ServerOpenchain) GetBlockByNumber(ctx context.Context, num *pb.BlockNum
 			deploymentSpec := &pb.ChaincodeDeploymentSpec{}
 			err := proto.Unmarshal(transaction.Payload, deploymentSpec)
 			if err != nil {
-				if !viper.GetBool("security.privacy") {
-					return nil, err
-				}
-				//if privacy is enabled, payload is encrypted and unmarshal will
-				//likely fail... given we were going to just set the CodePackage
-				//to nil anyway, just recover and continue
-				deploymentSpec = &pb.ChaincodeDeploymentSpec{}
+				return nil, err
 			}
 			deploymentSpec.CodePackage = nil
 			deploymentSpecBytes, err := proto.Marshal(deploymentSpec)
@@ -128,7 +125,7 @@ func (s *ServerOpenchain) GetBlockByNumber(ctx context.Context, num *pb.BlockNum
 
 // GetBlockCount returns the current number of blocks in the blockchain data
 // structure.
-func (s *ServerOpenchain) GetBlockCount(ctx context.Context, e *google_protobuf.Empty) (*pb.BlockCount, error) {
+func (s *ServerOpenchain) GetBlockCount(ctx context.Context, e *google_protobuf1.Empty) (*pb.BlockCount, error) {
 	// Total number of blocks in the blockchain.
 	size := s.ledger.GetBlockchainSize()
 
@@ -163,12 +160,12 @@ func (s *ServerOpenchain) GetTransactionByUUID(ctx context.Context, txUUID strin
 }
 
 // GetPeers returns a list of all peer nodes currently connected to the target peer.
-func (s *ServerOpenchain) GetPeers(ctx context.Context, e *google_protobuf.Empty) (*pb.PeersMessage, error) {
+func (s *ServerOpenchain) GetPeers(ctx context.Context, e *google_protobuf1.Empty) (*pb.PeersMessage, error) {
 	return s.peerInfo.GetPeers()
 }
 
 // GetPeerEndpoint returns PeerEndpoint info of target peer.
-func (s *ServerOpenchain) GetPeerEndpoint(ctx context.Context, e *google_protobuf.Empty) (*pb.PeersMessage, error) {
+func (s *ServerOpenchain) GetPeerEndpoint(ctx context.Context, e *google_protobuf1.Empty) (*pb.PeersMessage, error) {
 	peers := []*pb.PeerEndpoint{}
 	peerEndpoint, err := s.peerInfo.GetPeerEndpoint()
 	if err != nil {

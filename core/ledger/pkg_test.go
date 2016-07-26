@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package ledger
@@ -104,7 +107,7 @@ func (testWrapper *blockchainTestWrapper) populateBlockChainWithSampleData() (bl
 
 	// -----------------------------<Genesis block>-------------------------------
 	// Add the first (genesis block)
-	block1 := protos.NewBlock(nil, []byte(testutil.GenerateUUID(testWrapper.t)))
+	block1 := protos.NewBlock(nil, nil)
 	allBlocks = append(allBlocks, block1)
 	allHashes = append(allHashes, []byte("stateHash1"))
 	testWrapper.addNewBlock(block1, []byte("stateHash1"))
@@ -127,7 +130,7 @@ func (testWrapper *blockchainTestWrapper) populateBlockChainWithSampleData() (bl
 	// -----------------------------</Block 2>------------------------------------
 
 	// -----------------------------<Block 3>-------------------------------------
-	// Create a transaction
+	// Create a transaction'
 	transaction3a, err := protos.NewTransaction(protos.ChaincodeID{Path: "MyContract"}, testutil.GenerateUUID(testWrapper.t), "setX", []string{"{x: \"hello\"}"})
 	if err != nil {
 		return nil, nil, err
@@ -164,8 +167,8 @@ type ledgerTestWrapper struct {
 }
 
 func createFreshDBAndTestLedgerWrapper(tb testing.TB) *ledgerTestWrapper {
-	testDBWrapper.CleanDB(tb)
-	ledger, err := GetNewLedger()
+	testDBWrapper.CreateFreshDB(tb)
+	ledger, err := newLedger()
 	testutil.AssertNoError(tb, err, "Error while constructing ledger")
 	return &ledgerTestWrapper{ledger, tb}
 }

@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package noops
@@ -67,18 +70,18 @@ func newNoops(c consensus.Stack) consensus.Consenter {
 	i.stack = c
 	config := loadConfig()
 	blockSize := config.GetInt("block.size")
-	blockWait := config.GetString("block.wait")
-	if _, err = strconv.Atoi(blockWait); err == nil {
-		blockWait = blockWait + "s" //if string does not have unit of measure, default to seconds
+	blockTimeout := config.GetString("block.timeout")
+	if _, err = strconv.Atoi(blockTimeout); err == nil {
+		blockTimeout = blockTimeout + "s" //if string does not have unit of measure, default to seconds
 	}
-	i.duration, err = time.ParseDuration(blockWait)
+	i.duration, err = time.ParseDuration(blockTimeout)
 	if err != nil || i.duration == 0 {
-		panic(fmt.Errorf("Cannot parse block wait: %s", err))
+		panic(fmt.Errorf("Cannot parse block timeout: %s", err))
 	}
 
-	logger.Infof("NOOPS consensus type = %T", i)
-	logger.Infof("NOOPS block size = %v", blockSize)
-	logger.Infof("NOOPS block wait = %v", i.duration)
+	logger.Info("NOOPS consensus type = %T", i)
+	logger.Info("NOOPS block size = %v", blockSize)
+	logger.Info("NOOPS block timeout = %v", i.duration)
 
 	i.txQ = newTXQ(blockSize)
 
@@ -92,7 +95,7 @@ func newNoops(c consensus.Stack) consensus.Consenter {
 // RecvMsg is called for Message_CHAIN_TRANSACTION and Message_CONSENSUS messages.
 func (i *Noops) RecvMsg(msg *pb.Message, senderHandle *pb.PeerID) error {
 	if logger.IsEnabledFor(logging.DEBUG) {
-		logger.Debugf("Handling Message of type: %s ", msg.Type)
+		logger.Debug("Handling Message of type: %s ", msg.Type)
 	}
 	if msg.Type == pb.Message_CHAIN_TRANSACTION {
 		if err := i.broadcastConsensusMsg(msg); nil != err {
@@ -105,7 +108,7 @@ func (i *Noops) RecvMsg(msg *pb.Message, senderHandle *pb.PeerID) error {
 			return err
 		}
 		if logger.IsEnabledFor(logging.DEBUG) {
-			logger.Debugf("Sending to channel tx uuid: %s", tx.Uuid)
+			logger.Debug("Sending to channel tx uuid: ", tx.Uuid)
 		}
 		i.channel <- tx
 	}
@@ -122,7 +125,7 @@ func (i *Noops) broadcastConsensusMsg(msg *pb.Message) error {
 	// other validators may execute the transaction
 	msg.Type = pb.Message_CONSENSUS
 	if logger.IsEnabledFor(logging.DEBUG) {
-		logger.Debugf("Broadcasting %s", msg.Type)
+		logger.Debug("Broadcasting %s", msg.Type)
 	}
 	txs := &pb.TransactionBlock{Transactions: []*pb.Transaction{t}}
 	payload, err := proto.Marshal(txs)
@@ -203,7 +206,7 @@ func (i *Noops) processBlock() error {
 func (i *Noops) processTransactions() error {
 	timestamp := util.CreateUtcTimestamp()
 	if logger.IsEnabledFor(logging.DEBUG) {
-		logger.Debugf("Starting TX batch with timestamp: %v", timestamp)
+		logger.Debug("Starting TX batch with timestamp: %v", timestamp)
 	}
 	if err := i.stack.BeginTxBatch(timestamp); err != nil {
 		return err
@@ -212,22 +215,22 @@ func (i *Noops) processTransactions() error {
 	// Grab all transactions from the FIFO queue and run them in order
 	txarr := i.txQ.getTXs()
 	if logger.IsEnabledFor(logging.DEBUG) {
-		logger.Debugf("Executing batch of %d transactions with timestamp %v", len(txarr), timestamp)
+		logger.Debug("Executing batch of %d transactions with timestamp %v", len(txarr), timestamp)
 	}
 	_, err := i.stack.ExecTxs(timestamp, txarr)
 
 	//consensus does not need to understand transaction errors, errors here are
 	//actual ledger errors, and often irrecoverable
 	if err != nil {
-		logger.Debugf("Rolling back TX batch with timestamp: %v", timestamp)
+		logger.Debug("Rolling back TX batch with timestamp: %v", timestamp)
 		i.stack.RollbackTxBatch(timestamp)
 		return fmt.Errorf("Fail to execute transactions: %v", err)
 	}
 	if logger.IsEnabledFor(logging.DEBUG) {
-		logger.Debugf("Committing TX batch with timestamp: %v", timestamp)
+		logger.Debug("Committing TX batch with timestamp: %v", timestamp)
 	}
 	if _, err := i.stack.CommitTxBatch(timestamp, nil); err != nil {
-		logger.Debugf("Rolling back TX batch with timestamp: %v", timestamp)
+		logger.Debug("Rolling back TX batch with timestamp: %v", timestamp)
 		i.stack.RollbackTxBatch(timestamp)
 		return err
 	}
@@ -250,7 +253,7 @@ func (i *Noops) getBlockData() (*pb.Block, *statemgmt.StateDelta, error) {
 
 	blockHeight := ledger.GetBlockchainSize()
 	if logger.IsEnabledFor(logging.DEBUG) {
-		logger.Debugf("Preparing to broadcast with block number %v", blockHeight)
+		logger.Debug("Preparing to broadcast with block number %v", blockHeight)
 	}
 	block, err := ledger.GetBlockByNumber(blockHeight - 1)
 	if nil != err {
@@ -262,7 +265,7 @@ func (i *Noops) getBlockData() (*pb.Block, *statemgmt.StateDelta, error) {
 		return nil, nil, err
 	}
 	if logger.IsEnabledFor(logging.DEBUG) {
-		logger.Debugf("Got the delta state of block number %v", blockHeight)
+		logger.Debug("Got the delta state of block number %v", blockHeight)
 	}
 
 	return block, delta, nil
@@ -292,24 +295,4 @@ func (i *Noops) notifyBlockAdded(block *pb.Block, delta *statemgmt.StateDelta) e
 		return fmt.Errorf("Failed to broadcast with errors: %v", errs)
 	}
 	return nil
-}
-
-// Executed is called whenever Execute completes, no-op for noops as it uses the legacy synchronous api
-func (i *Noops) Executed(tag interface{}) {
-	// Never called
-}
-
-// Committed is called whenever Commit completes, no-op for noops as it uses the legacy synchronous api
-func (i *Noops) Committed(tag interface{}, target *pb.BlockchainInfo) {
-	// Never called
-}
-
-// RolledBack is called whenever a Rollback completes, no-op for noops as it uses the legacy synchronous api
-func (i *Noops) RolledBack(tag interface{}) {
-	// Never called
-}
-
-// StatedUpdates is called when state transfer completes, if target is nil, this indicates a failure and a new target should be supplied, no-op for noops as it uses the legacy synchronous api
-func (i *Noops) StateUpdated(tag interface{}, target *pb.BlockchainInfo) {
-	// Never called
 }

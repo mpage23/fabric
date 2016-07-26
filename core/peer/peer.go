@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package peer
@@ -21,28 +24,28 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 
-	"github.com/hyperledger/fabric/core/comm"
 	"github.com/hyperledger/fabric/core/crypto"
-	"github.com/hyperledger/fabric/core/db"
-	"github.com/hyperledger/fabric/core/discovery"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/statemgmt"
 	"github.com/hyperledger/fabric/core/ledger/statemgmt/state"
 	"github.com/hyperledger/fabric/core/util"
 	pb "github.com/hyperledger/fabric/protos"
 )
+
+const defaultTimeout = time.Second * 3
 
 // Peer provides interface for a peer
 type Peer interface {
@@ -70,23 +73,6 @@ type RemoteLedger interface {
 // BlockChainAccessor interface for retreiving blocks by block number
 type BlockChainAccessor interface {
 	GetBlockByNumber(blockNumber uint64) (*pb.Block, error)
-	GetBlockchainSize() uint64
-	GetCurrentStateHash() (stateHash []byte, err error)
-}
-
-// BlockChainModifier interface for applying changes to the block chain
-type BlockChainModifier interface {
-	ApplyStateDelta(id interface{}, delta *statemgmt.StateDelta) error
-	RollbackStateDelta(id interface{}) error
-	CommitStateDelta(id interface{}) error
-	EmptyState() error
-	PutBlock(blockNumber uint64, block *pb.Block) error
-}
-
-// BlockChainUtil interface for interrogating the block chain
-type BlockChainUtil interface {
-	HashBlock(block *pb.Block) ([]byte, error)
-	VerifyBlockchain(start, finish uint64) (uint64, error)
 }
 
 // StateAccessor interface for retreiving blocks by block number
@@ -109,8 +95,6 @@ type MessageHandlerCoordinator interface {
 	Peer
 	SecurityAccessor
 	BlockChainAccessor
-	BlockChainModifier
-	BlockChainUtil
 	StateAccessor
 	RegisterHandler(messageHandler MessageHandler) error
 	DeregisterHandler(messageHandler MessageHandler) error
@@ -120,7 +104,6 @@ type MessageHandlerCoordinator interface {
 	GetRemoteLedger(receiver *pb.PeerID) (RemoteLedger, error)
 	PeersDiscovered(*pb.PeersMessage) error
 	ExecuteTransaction(transaction *pb.Transaction) *pb.Response
-	Discoverer
 }
 
 // ChatStream interface supported by stream between Peers
@@ -160,10 +143,34 @@ func GetLocalIP() string {
 
 // NewPeerClientConnectionWithAddress Returns a new grpc.ClientConn to the configured local PEER.
 func NewPeerClientConnectionWithAddress(peerAddress string) (*grpc.ClientConn, error) {
-	if comm.TLSEnabled() {
-		return comm.NewClientConnectionWithAddress(peerAddress, true, true, comm.InitTLSForPeer())
+	var opts []grpc.DialOption
+	if viper.GetBool("peer.tls.enabled") {
+		var sn string
+		if viper.GetString("peer.tls.serverhostoverride") != "" {
+			sn = viper.GetString("peer.tls.serverhostoverride")
+		}
+		var creds credentials.TransportAuthenticator
+		if viper.GetString("peer.tls.cert.file") != "" {
+			var err error
+			creds, err = credentials.NewClientTLSFromFile(viper.GetString("peer.tls.cert.file"), sn)
+			if err != nil {
+				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+			}
+		} else {
+			creds = credentials.NewClientTLSFromCert(nil, sn)
+		}
+		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else {
+		// No security, disable in grpc
+		opts = append(opts, grpc.WithInsecure())
 	}
-	return comm.NewClientConnectionWithAddress(peerAddress, true, false, nil)
+	opts = append(opts, grpc.WithTimeout(defaultTimeout))
+	opts = append(opts, grpc.WithBlock())
+	conn, err := grpc.Dial(peerAddress, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return conn, err
 }
 
 type ledgerWrapper struct {
@@ -176,10 +183,8 @@ type handlerMap struct {
 	m map[pb.PeerID]MessageHandler
 }
 
-// HandlerFactory for creating new MessageHandlers
 type HandlerFactory func(MessageHandlerCoordinator, ChatStream, bool, MessageHandler) (MessageHandler, error)
 
-// EngineFactory for creating new engines
 type EngineFactory func(MessageHandlerCoordinator) (Engine, error)
 
 // PeerImpl implementation of the Peer service
@@ -190,9 +195,6 @@ type PeerImpl struct {
 	secHelper      crypto.Peer
 	engine         Engine
 	isValidator    bool
-	reconnectOnce  sync.Once
-	discHelper     discovery.Discovery
-	discPersist    bool
 }
 
 // TransactionProccesor responsible for processing of Transactions
@@ -211,8 +213,6 @@ type Engine interface {
 // NewPeerWithHandler returns a Peer which uses the supplied handler factory function for creating new handlers on new Chat service invocations.
 func NewPeerWithHandler(secHelperFunc func() crypto.Peer, handlerFact HandlerFactory) (*PeerImpl, error) {
 	peer := new(PeerImpl)
-	peerNodes := peer.initDiscovery()
-
 	if handlerFact == nil {
 		return nil, errors.New("Cannot supply nil handler factory")
 	}
@@ -222,7 +222,7 @@ func NewPeerWithHandler(secHelperFunc func() crypto.Peer, handlerFact HandlerFac
 	peer.secHelper = secHelperFunc()
 
 	// Install security object for peer
-	if SecurityEnabled() {
+	if viper.GetBool("security.enabled") {
 		if peer.secHelper == nil {
 			return nil, fmt.Errorf("Security helper not provided")
 		}
@@ -233,34 +233,24 @@ func NewPeerWithHandler(secHelperFunc func() crypto.Peer, handlerFact HandlerFac
 		return nil, fmt.Errorf("Error constructing NewPeerWithHandler: %s", err)
 	}
 	peer.ledgerWrapper = &ledgerWrapper{ledger: ledgerPtr}
-
-	peer.chatWithSomePeers(peerNodes)
+	go peer.chatWithPeer(viper.GetString("peer.discovery.rootnode"))
 	return peer, nil
 }
 
-// NewPeerWithEngine returns a Peer which uses the supplied handler factory function for creating new handlers on new Chat service invocations.
+// NewPeerWithHandler returns a Peer which uses the supplied handler factory function for creating new handlers on new Chat service invocations.
 func NewPeerWithEngine(secHelperFunc func() crypto.Peer, engFactory EngineFactory) (peer *PeerImpl, err error) {
 	peer = new(PeerImpl)
-	peerNodes := peer.initDiscovery()
-
 	peer.handlerMap = &handlerMap{m: make(map[pb.PeerID]MessageHandler)}
 
-	peer.isValidator = ValidatorEnabled()
+	peer.isValidator = viper.GetBool("peer.validator.enabled")
 	peer.secHelper = secHelperFunc()
 
 	// Install security object for peer
-	if SecurityEnabled() {
+	if viper.GetBool("security.enabled") {
 		if peer.secHelper == nil {
 			return nil, fmt.Errorf("Security helper not provided")
 		}
 	}
-
-	// Initialize the ledger before the engine, as consensus may want to begin interrogating the ledger immediately
-	ledgerPtr, err := ledger.GetLedger()
-	if err != nil {
-		return nil, fmt.Errorf("Error constructing NewPeerWithHandler: %s", err)
-	}
-	peer.ledgerWrapper = &ledgerWrapper{ledger: ledgerPtr}
 
 	peer.engine, err = engFactory(peer)
 	if err != nil {
@@ -271,9 +261,13 @@ func NewPeerWithEngine(secHelperFunc func() crypto.Peer, engFactory EngineFactor
 		return nil, errors.New("Cannot supply nil handler factory")
 	}
 
-	peer.chatWithSomePeers(peerNodes)
+	ledgerPtr, err := ledger.GetLedger()
+	if err != nil {
+		return nil, fmt.Errorf("Error constructing NewPeerWithHandler: %s", err)
+	}
+	peer.ledgerWrapper = &ledgerWrapper{ledger: ledgerPtr}
+	go peer.chatWithPeer(viper.GetString("peer.discovery.rootnode"))
 	return peer, nil
-
 }
 
 // Chat implementation of the the Chat bidi streaming RPC function
@@ -283,15 +277,15 @@ func (p *PeerImpl) Chat(stream pb.Peer_ChatServer) error {
 
 // ProcessTransaction implementation of the ProcessTransaction RPC function
 func (p *PeerImpl) ProcessTransaction(ctx context.Context, tx *pb.Transaction) (response *pb.Response, err error) {
-	peerLogger.Debugf("ProcessTransaction processing transaction uuid = %s", tx.Uuid)
+	peerLogger.Debug("ProcessTransaction processing transaction uuid = %s", tx.Uuid)
 	// Need to validate the Tx's signature if we are a validator.
 	if p.isValidator {
 		// Verify transaction signature if security is enabled
 		secHelper := p.secHelper
 		if nil != secHelper {
-			peerLogger.Debugf("Verifying transaction signature %s", tx.Uuid)
+			peerLogger.Debug("Verifying transaction signature %s", tx.Uuid)
 			if tx, err = secHelper.TransactionPreValidation(tx); err != nil {
-				peerLogger.Errorf("ProcessTransaction failed to verify transaction %v", err)
+				peerLogger.Error("ProcessTransaction failed to verify transaction %v", err)
 				return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
 			}
 		}
@@ -300,10 +294,11 @@ func (p *PeerImpl) ProcessTransaction(ctx context.Context, tx *pb.Transaction) (
 	return p.ExecuteTransaction(tx), err
 }
 
+
 // GetPeers returns the currently registered PeerEndpoints
 func (p *PeerImpl) GetPeers() (*pb.PeersMessage, error) {
-	p.handlerMap.RLock()
-	defer p.handlerMap.RUnlock()
+	p.handlerMap.Lock()
+	defer p.handlerMap.Unlock()
 	peers := []*pb.PeerEndpoint{}
 	for _, msgHandler := range p.handlerMap.m {
 		peerEndpoint, err := msgHandler.To()
@@ -316,19 +311,10 @@ func (p *PeerImpl) GetPeers() (*pb.PeersMessage, error) {
 	return peersMessage, nil
 }
 
-func getPeerAddresses(peersMsg *pb.PeersMessage) []string {
-	peers := peersMsg.GetPeers()
-	addresses := make([]string, len(peers))
-	for i, v := range peers {
-		addresses[i] = v.Address
-	}
-	return addresses
-}
-
 // GetRemoteLedger returns the RemoteLedger interface for the remote Peer Endpoint
 func (p *PeerImpl) GetRemoteLedger(receiverHandle *pb.PeerID) (RemoteLedger, error) {
-	p.handlerMap.RLock()
-	defer p.handlerMap.RUnlock()
+	p.handlerMap.Lock()
+	defer p.handlerMap.Unlock()
 	remoteLedger, ok := p.handlerMap.m[*receiverHandle]
 	if !ok {
 		return nil, fmt.Errorf("Remote ledger not found for receiver %s", receiverHandle.Name)
@@ -338,19 +324,19 @@ func (p *PeerImpl) GetRemoteLedger(receiverHandle *pb.PeerID) (RemoteLedger, err
 
 // PeersDiscovered used by MessageHandlers for notifying this coordinator of discovered PeerEndoints. May include this Peer's PeerEndpoint.
 func (p *PeerImpl) PeersDiscovered(peersMessage *pb.PeersMessage) error {
+	p.handlerMap.Lock()
+	defer p.handlerMap.Unlock()
 	thisPeersEndpoint, err := GetPeerEndpoint()
 	if err != nil {
 		return fmt.Errorf("Error in processing PeersDiscovered: %s", err)
 	}
-	p.handlerMap.RLock()
-	defer p.handlerMap.RUnlock()
 	for _, peerEndpoint := range peersMessage.Peers {
 		// Filter out THIS Peer's endpoint
 		if *getHandlerKeyFromPeerEndpoint(thisPeersEndpoint) == *getHandlerKeyFromPeerEndpoint(peerEndpoint) {
 			// NOOP
 		} else if _, ok := p.handlerMap.m[*getHandlerKeyFromPeerEndpoint(peerEndpoint)]; ok == false {
 			// Start chat with Peer
-			p.chatWithSomePeers([]string{peerEndpoint.Address})
+			go p.chatWithPeer(peerEndpoint.Address)
 		}
 	}
 	return nil
@@ -381,7 +367,7 @@ func (p *PeerImpl) RegisterHandler(messageHandler MessageHandler) error {
 		return newDuplicateHandlerError(messageHandler)
 	}
 	p.handlerMap.m[*key] = messageHandler
-	peerLogger.Debugf("registered handler with key: %s", key)
+	peerLogger.Debug("registered handler with key: %s", key)
 	return nil
 }
 
@@ -398,14 +384,14 @@ func (p *PeerImpl) DeregisterHandler(messageHandler MessageHandler) error {
 		return fmt.Errorf("Error deregistering handler, could not find handler with key: %s", key)
 	}
 	delete(p.handlerMap.m, *key)
-	peerLogger.Debugf("Deregistered handler with key: %s", key)
+	peerLogger.Debug("Deregistered handler with key: %s", key)
 	return nil
 }
 
-// Clone the handler map to avoid locking across SendMessage
+//clone the handler so as to avoid lock across SendMessage
 func (p *PeerImpl) cloneHandlerMap(typ pb.PeerEndpoint_Type) map[pb.PeerID]MessageHandler {
-	p.handlerMap.RLock()
-	defer p.handlerMap.RUnlock()
+	p.handlerMap.Lock()
+	defer p.handlerMap.Unlock()
 	clone := make(map[pb.PeerID]MessageHandler)
 	for id, msgHandler := range p.handlerMap.m {
 		//pb.PeerEndpoint_UNDEFINED collects all peers
@@ -425,57 +411,24 @@ func (p *PeerImpl) cloneHandlerMap(typ pb.PeerEndpoint_Type) map[pb.PeerID]Messa
 // Broadcast will broadcast to all registered PeerEndpoints if the type is PeerEndpoint_UNDEFINED
 func (p *PeerImpl) Broadcast(msg *pb.Message, typ pb.PeerEndpoint_Type) []error {
 	cloneMap := p.cloneHandlerMap(typ)
-	errorsFromHandlers := make(chan error, len(cloneMap))
-	var bcWG sync.WaitGroup
-
-	start := time.Now()
-
+	var errorsFromHandlers []error
 	for _, msgHandler := range cloneMap {
-		bcWG.Add(1)
-		go func(msgHandler MessageHandler) {
-			defer bcWG.Done()
-			host, _ := msgHandler.To()
-			t1 := time.Now()
-			err := msgHandler.SendMessage(msg)
-			if err != nil {
-				toPeerEndpoint, _ := msgHandler.To()
-				errorsFromHandlers <- fmt.Errorf("Error broadcasting msg (%s) to PeerEndpoint (%s): %s", msg.Type, toPeerEndpoint, err)
-			}
-			peerLogger.Debugf("Sending %d bytes to %s took %v", len(msg.Payload), host.Address, time.Since(t1))
-
-		}(msgHandler)
-
+		err := msgHandler.SendMessage(msg)
+		if err != nil {
+			toPeerEndpoint, _ := msgHandler.To()
+			errorsFromHandlers = append(errorsFromHandlers, fmt.Errorf("Error broadcasting msg (%s) to PeerEndpoint (%s): %s", msg.Type, toPeerEndpoint, err))
+		}
 	}
-	bcWG.Wait()
-	close(errorsFromHandlers)
-	var returnedErrors []error
-	for err := range errorsFromHandlers {
-		returnedErrors = append(returnedErrors, err)
-	}
-
-	elapsed := time.Since(start)
-	peerLogger.Debugf("Broadcast took %v", elapsed)
-
-	return returnedErrors
-}
-
-func (p *PeerImpl) getMessageHandler(receiverHandle *pb.PeerID) (MessageHandler, error) {
-	p.handlerMap.RLock()
-	defer p.handlerMap.RUnlock()
-	msgHandler, ok := p.handlerMap.m[*receiverHandle]
-	if !ok {
-		return nil, fmt.Errorf("Message handler not found for receiver %s", receiverHandle.Name)
-	}
-	return msgHandler, nil
+	return errorsFromHandlers
 }
 
 // Unicast sends a message to a specific peer.
 func (p *PeerImpl) Unicast(msg *pb.Message, receiverHandle *pb.PeerID) error {
-	msgHandler, err := p.getMessageHandler(receiverHandle)
-	if err != nil {
-		return err
-	}
-	err = msgHandler.SendMessage(msg)
+	p.handlerMap.Lock()
+	msgHandler := p.handlerMap.m[*receiverHandle]
+	//don't lock across SendMessage
+	p.handlerMap.Unlock()
+	err := msgHandler.SendMessage(msg)
 	if err != nil {
 		toPeerEndpoint, _ := msgHandler.To()
 		return fmt.Errorf("Error unicasting msg (%s) to PeerEndpoint (%s): %s", msg.Type, toPeerEndpoint, err)
@@ -491,7 +444,7 @@ func (p *PeerImpl) SendTransactionsToPeer(peerAddress string, transaction *pb.Tr
 	}
 	defer conn.Close()
 	serverClient := pb.NewPeerClient(conn)
-	peerLogger.Debugf("Sending TX to Peer: %s", peerAddress)
+	peerLogger.Debug("Sending TX to Peer: %s", peerAddress)
 	response, err = serverClient.ProcessTransaction(context.Background(), transaction)
 	if err != nil {
 		return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(fmt.Sprintf("Error calling ProcessTransaction on remote peer at address=%s:  %s", peerAddress, err))}
@@ -502,7 +455,7 @@ func (p *PeerImpl) SendTransactionsToPeer(peerAddress string, transaction *pb.Tr
 // sendTransactionsToLocalEngine send the transaction to the local engine (This Peer is a validator)
 func (p *PeerImpl) sendTransactionsToLocalEngine(transaction *pb.Transaction) *pb.Response {
 
-	peerLogger.Debugf("Marshalling transaction %s to send to local engine", transaction.Type)
+	peerLogger.Debug("Marshalling transaction %s to send to local engine", transaction.Type)
 	data, err := proto.Marshal(transaction)
 	if err != nil {
 		return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(fmt.Sprintf("Error sending transaction to local engine: %s", err))}
@@ -510,93 +463,50 @@ func (p *PeerImpl) sendTransactionsToLocalEngine(transaction *pb.Transaction) *p
 
 	var response *pb.Response
 	msg := &pb.Message{Type: pb.Message_CHAIN_TRANSACTION, Payload: data, Timestamp: util.CreateUtcTimestamp()}
-	peerLogger.Debugf("Sending message %s with timestamp %v to local engine", msg.Type, msg.Timestamp)
+	peerLogger.Debug("Sending message %s with timestamp %v to local engine", msg.Type, msg.Timestamp)
 	response = p.engine.ProcessTransactionMsg(msg, transaction)
 
 	return response
 }
 
-func (p *PeerImpl) ensureConnected() {
-	touchPeriod := viper.GetDuration("peer.discovery.touchPeriod")
-	touchMaxNodes := viper.GetInt("peer.discovery.touchMaxNodes")
-	tickChan := time.NewTicker(touchPeriod).C
-	peerLogger.Debugf("Starting Peer reconnect service (touch service), with period = %s", touchPeriod)
+func (p *PeerImpl) chatWithPeer(peerAddress string) error {
+	if len(peerAddress) == 0 {
+		peerLogger.Debug("Starting up the first peer")
+		return nil // nothing to do
+	}
 	for {
-		// Simply loop and check if need to reconnect
-		<-tickChan
-		peersMsg, err := p.GetPeers()
+		time.Sleep(1 * time.Second)
+		peerLogger.Debug("Initiating Chat with peer address: %s", peerAddress)
+		conn, err := NewPeerClientConnectionWithAddress(peerAddress)
 		if err != nil {
-			peerLogger.Errorf("Error in touch service: %s", err.Error())
+			e := fmt.Errorf("Error creating connection to peer address=%s:  %s", peerAddress, err)
+			peerLogger.Error(e.Error())
+			continue
 		}
-		allNodes := p.discHelper.GetAllNodes() // these will always be returned in random order
-		if len(peersMsg.Peers) < len(allNodes) {
-			peerLogger.Warning("Touch service indicates dropped connections, attempting to reconnect...")
-			delta := util.FindMissingElements(allNodes, getPeerAddresses(peersMsg))
-			if len(delta) > touchMaxNodes {
-				delta = delta[:touchMaxNodes]
-			}
-			p.chatWithSomePeers(delta)
-		} else {
-			peerLogger.Debug("Touch service indicates no dropped connections")
+		serverClient := pb.NewPeerClient(conn)
+		ctx := context.Background()
+		stream, err := serverClient.Chat(ctx)
+		if err != nil {
+			e := fmt.Errorf("Error establishing chat with peer address=%s:  %s", peerAddress, err)
+			peerLogger.Error(fmt.Sprintf("%s", e.Error()))
+			continue
 		}
-		peerLogger.Debugf("Connected to: %v", getPeerAddresses(peersMsg))
-		peerLogger.Debugf("Discovery knows about: %v", allNodes)
-	}
-
-}
-
-// chatWithSomePeers initiates chat with 1 or all peers according to whether the node is a validator or not
-func (p *PeerImpl) chatWithSomePeers(addresses []string) {
-	// start the function to ensure we are connected
-	p.reconnectOnce.Do(func() {
-		go p.ensureConnected()
-	})
-	if len(addresses) == 0 {
-		peerLogger.Debug("Starting up the first peer of a new network")
-		return // nothing to do
-	}
-	for _, address := range addresses {
-		if pe, err := GetPeerEndpoint(); err == nil {
-			if address == pe.Address {
-				peerLogger.Debugf("Skipping own address: %v", address)
-				continue
-			}
-		} else {
-			peerLogger.Errorf("Failed to obtain peer endpoint, %v", err)
-			return
+		peerLogger.Debug("Established Chat with peer address: %s", peerAddress)
+		err = p.handleChat(ctx, stream, true)
+		stream.CloseSend()
+		if err != nil {
+			e := fmt.Errorf("Ending chat with peer address=%s due to error:  %s", peerAddress, err)
+			peerLogger.Error(e.Error())
+			return e
 		}
-		go p.chatWithPeer(address)
-	}
-}
 
-func (p *PeerImpl) chatWithPeer(address string) error {
-	peerLogger.Debugf("Initiating Chat with peer address: %s", address)
-	conn, err := NewPeerClientConnectionWithAddress(address)
-	if err != nil {
-		peerLogger.Errorf("Error creating connection to peer address %s: %s", address, err)
-		return err
 	}
-	serverClient := pb.NewPeerClient(conn)
-	ctx := context.Background()
-	stream, err := serverClient.Chat(ctx)
-	if err != nil {
-		peerLogger.Errorf("Error establishing chat with peer address %s: %s", address, err)
-		return err
-	}
-	peerLogger.Debugf("Established Chat with peer address: %s", address)
-	err = p.handleChat(ctx, stream, true)
-	stream.CloseSend()
-	if err != nil {
-		peerLogger.Errorf("Ending Chat with peer address %s due to error: %s", address, err)
-		return err
-	}
-	return nil
 }
 
 // Chat implementation of the the Chat bidi streaming RPC function
 func (p *PeerImpl) handleChat(ctx context.Context, stream ChatStream, initiatedStream bool) error {
 	deadline, ok := ctx.Deadline()
-	peerLogger.Debugf("Current context deadline = %s, ok = %v", deadline, ok)
+	peerLogger.Debug("Current context deadline = %s, ok = %v", deadline, ok)
 	handler, err := p.handlerFactory(p, stream, initiatedStream, nil)
 	if err != nil {
 		return fmt.Errorf("Error creating handler during handleChat initiation: %s", err)
@@ -615,7 +525,7 @@ func (p *PeerImpl) handleChat(ctx context.Context, stream ChatStream, initiatedS
 		}
 		err = handler.HandleMessage(in)
 		if err != nil {
-			peerLogger.Errorf("Error handling message: %s", err)
+			peerLogger.Error(fmt.Sprintf("Error handling message: %s", err))
 			//return err
 		}
 	}
@@ -626,8 +536,8 @@ func (p *PeerImpl) ExecuteTransaction(transaction *pb.Transaction) (response *pb
 	if p.isValidator {
 		response = p.sendTransactionsToLocalEngine(transaction)
 	} else {
-		peerAddresses := p.discHelper.GetRandomNodes(1)
-		response = p.SendTransactionsToPeer(peerAddresses[0], transaction)
+		peerAddress := getValidatorStreamAddress()
+		response = p.SendTransactionsToPeer(peerAddress, transaction)
 	}
 	return response
 }
@@ -635,7 +545,7 @@ func (p *PeerImpl) ExecuteTransaction(transaction *pb.Transaction) (response *pb
 // GetPeerEndpoint returns the endpoint for this peer
 func (p *PeerImpl) GetPeerEndpoint() (*pb.PeerEndpoint, error) {
 	ep, err := GetPeerEndpoint()
-	if err == nil && SecurityEnabled() {
+	if err == nil && viper.GetBool("security.enabled") {
 		// Set the PkiID on the PeerEndpoint if security is enabled
 		ep.PkiID = p.GetSecHelper().GetID()
 	}
@@ -664,66 +574,6 @@ func (p *PeerImpl) GetBlockByNumber(blockNumber uint64) (*pb.Block, error) {
 	return p.ledgerWrapper.ledger.GetBlockByNumber(blockNumber)
 }
 
-// GetBlockchainSize returns the height/length of the blockchain
-func (p *PeerImpl) GetBlockchainSize() uint64 {
-	p.ledgerWrapper.RLock()
-	defer p.ledgerWrapper.RUnlock()
-	return p.ledgerWrapper.ledger.GetBlockchainSize()
-}
-
-// GetCurrentStateHash returns the current non-committed hash of the in memory state
-func (p *PeerImpl) GetCurrentStateHash() (stateHash []byte, err error) {
-	p.ledgerWrapper.RLock()
-	defer p.ledgerWrapper.RUnlock()
-	return p.ledgerWrapper.ledger.GetTempStateHash()
-}
-
-// HashBlock returns the hash of the included block, useful for mocking
-func (p *PeerImpl) HashBlock(block *pb.Block) ([]byte, error) {
-	return block.GetHash()
-}
-
-// VerifyBlockchain checks the integrity of the blockchain between indices start and finish,
-// returning the first block who's PreviousBlockHash field does not match the hash of the previous block
-func (p *PeerImpl) VerifyBlockchain(start, finish uint64) (uint64, error) {
-	p.ledgerWrapper.RLock()
-	defer p.ledgerWrapper.RUnlock()
-	return p.ledgerWrapper.ledger.VerifyChain(start, finish)
-}
-
-// ApplyStateDelta applies a state delta to the current state
-// The result of this function can be retrieved using GetCurrentStateDelta
-// To commit the result, call CommitStateDelta, or to roll it back
-// call RollbackStateDelta
-func (p *PeerImpl) ApplyStateDelta(id interface{}, delta *statemgmt.StateDelta) error {
-	p.ledgerWrapper.Lock()
-	defer p.ledgerWrapper.Unlock()
-	return p.ledgerWrapper.ledger.ApplyStateDelta(id, delta)
-}
-
-// CommitStateDelta makes the result of ApplyStateDelta permanent
-// and releases the resources necessary to rollback the delta
-func (p *PeerImpl) CommitStateDelta(id interface{}) error {
-	p.ledgerWrapper.Lock()
-	defer p.ledgerWrapper.Unlock()
-	return p.ledgerWrapper.ledger.CommitStateDelta(id)
-}
-
-// RollbackStateDelta undoes the results of ApplyStateDelta to revert
-// the current state back to the state before ApplyStateDelta was invoked
-func (p *PeerImpl) RollbackStateDelta(id interface{}) error {
-	p.ledgerWrapper.Lock()
-	defer p.ledgerWrapper.Unlock()
-	return p.ledgerWrapper.ledger.RollbackStateDelta(id)
-}
-
-// EmptyState completely empties the state and prepares it to restore a snapshot
-func (p *PeerImpl) EmptyState() error {
-	p.ledgerWrapper.Lock()
-	defer p.ledgerWrapper.Unlock()
-	return p.ledgerWrapper.ledger.DeleteALLStateKeysAndValues()
-}
-
 // GetStateSnapshot return the state snapshot
 func (p *PeerImpl) GetStateSnapshot() (*state.StateSnapshot, error) {
 	p.ledgerWrapper.RLock()
@@ -736,13 +586,6 @@ func (p *PeerImpl) GetStateDelta(blockNumber uint64) (*statemgmt.StateDelta, err
 	p.ledgerWrapper.RLock()
 	defer p.ledgerWrapper.RUnlock()
 	return p.ledgerWrapper.ledger.GetStateDelta(blockNumber)
-}
-
-// PutBlock inserts a raw block into the blockchain at the specified index, nearly no error checking is performed
-func (p *PeerImpl) PutBlock(blockNumber uint64, block *pb.Block) error {
-	p.ledgerWrapper.Lock()
-	defer p.ledgerWrapper.Unlock()
-	return p.ledgerWrapper.ledger.PutRawBlock(block, blockNumber)
 }
 
 // NewOpenchainDiscoveryHello constructs a new HelloMessage for sending
@@ -770,8 +613,8 @@ func (p *PeerImpl) GetSecHelper() crypto.Peer {
 }
 
 // signMessage modifies the passed in Message by setting the Signature based upon the Payload.
-func (p *PeerImpl) signMessageMutating(msg *pb.Message) error {
-	if SecurityEnabled() {
+func (p *PeerImpl) signMessageMutating(msg *pb.Message) (error) {
+	if viper.GetBool("security.enabled") {
 		sig, err := p.secHelper.Sign(msg.Payload)
 		if err != nil {
 			return fmt.Errorf("Error signing Openchain Message: %s", err)
@@ -780,110 +623,4 @@ func (p *PeerImpl) signMessageMutating(msg *pb.Message) error {
 		msg.Signature = sig
 	}
 	return nil
-}
-
-// initDiscovery load the addresses from the discovery list previously saved to disk and adds them to the current discovery list
-func (p *PeerImpl) initDiscovery() []string {
-	p.discHelper = discovery.NewDiscoveryImpl()
-	p.discPersist = viper.GetBool("peer.discovery.persist")
-	if !p.discPersist {
-		peerLogger.Warning("Discovery list will not be persisted to disk")
-	}
-	addresses, err := p.LoadDiscoveryList() // load any previously saved addresses
-	if err != nil {
-		peerLogger.Errorf("%s", err)
-	}
-	for _, address := range addresses { // add them to the current discovery list
-		_ = p.discHelper.AddNode(address)
-	}
-	peerLogger.Debugf("Retrieved discovery list from disk: %v", addresses)
-	// parse the config file, ENV flags, etc.
-	rootNodes := strings.Split(viper.GetString("peer.discovery.rootnode"), ",")
-	if !(len(rootNodes) == 1 && strings.Compare(rootNodes[0], "") == 0) {
-		addresses = append(rootNodes, p.discHelper.GetAllNodes()...)
-	}
-	return addresses
-}
-
-// =============================================================================
-// Persistor
-// =============================================================================
-
-// Persistor enables a peer to persist and restore data to the database
-// TODO Move over the persist package from consensus down to the peer level
-type Persistor interface {
-	Store(key string, value []byte) error
-	Load(key string) ([]byte, error)
-}
-
-// Store enables a peer to persist the given key,value pair to the database
-func (p *PeerImpl) Store(key string, value []byte) error {
-	db := db.GetDBHandle()
-	return db.Put(db.PersistCF, []byte(key), value)
-}
-
-// Load enables a peer to read the value that corresponds to the given database key
-func (p *PeerImpl) Load(key string) ([]byte, error) {
-	db := db.GetDBHandle()
-	return db.Get(db.PersistCF, []byte(key))
-}
-
-// =============================================================================
-// Discoverer
-// =============================================================================
-
-// Discoverer enables a peer to access/persist/restore its discovery list
-type Discoverer interface {
-	DiscoveryAccessor
-	DiscoveryPersistor
-}
-
-// DiscoveryAccessor enables a peer to hand out its discovery object
-type DiscoveryAccessor interface {
-	GetDiscHelper() discovery.Discovery
-}
-
-// GetDiscHelper enables a peer to retrieve its discovery object
-func (p *PeerImpl) GetDiscHelper() discovery.Discovery {
-	return p.discHelper
-}
-
-// DiscoveryPersistor enables a peer to persist/restore its discovery list to/from the database
-type DiscoveryPersistor interface {
-	LoadDiscoveryList() ([]string, error)
-	StoreDiscoveryList() error
-}
-
-// StoreDiscoveryList enables a peer to persist the discovery list to the database
-func (p *PeerImpl) StoreDiscoveryList() error {
-	if !p.discPersist {
-		return nil
-	}
-	var err error
-	addresses := p.discHelper.GetAllNodes()
-	raw, err := proto.Marshal(&pb.PeersAddresses{Addresses: addresses})
-	if err != nil {
-		err = fmt.Errorf("Could not marshal discovery list message: %s", err)
-		peerLogger.Error(err)
-		return err
-	}
-	return p.Store("discovery", raw)
-}
-
-// LoadDiscoveryList enables a peer to load the discovery list from the database
-func (p *PeerImpl) LoadDiscoveryList() ([]string, error) {
-	var err error
-	packed, err := p.Load("discovery")
-	if err != nil {
-		err = fmt.Errorf("Unable to load discovery list from DB: %s", err)
-		peerLogger.Error(err)
-		return nil, err
-	}
-	addresses := &pb.PeersAddresses{}
-	err = proto.Unmarshal(packed, addresses)
-	if err != nil {
-		err = fmt.Errorf("Could not unmarshal discovery list message: %s", err)
-		peerLogger.Error(err)
-	}
-	return addresses.Addresses, err
 }

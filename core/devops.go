@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package core
@@ -19,21 +22,15 @@ package core
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 
-	"encoding/asn1"
-	"encoding/base64"
-	"sync"
-
-	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/chaincode"
 	"github.com/hyperledger/fabric/core/chaincode/platforms"
 	"github.com/hyperledger/fabric/core/container"
-	crypto "github.com/hyperledger/fabric/core/crypto"
+	"github.com/hyperledger/fabric/core/crypto"
 	"github.com/hyperledger/fabric/core/peer"
 	"github.com/hyperledger/fabric/core/util"
 	pb "github.com/hyperledger/fabric/protos"
@@ -45,45 +42,12 @@ var devopsLogger = logging.MustGetLogger("devops")
 func NewDevopsServer(coord peer.MessageHandlerCoordinator) *Devops {
 	d := new(Devops)
 	d.coord = coord
-	d.isSecurityEnabled = viper.GetBool("security.enabled")
-	d.bindingMap = &bindingMap{m: make(map[string]crypto.TransactionHandler)}
 	return d
-}
-
-// bindingMap Used to store map of binding to TransactionHandler
-type bindingMap struct {
-	sync.RWMutex
-	m map[string]crypto.TransactionHandler
 }
 
 // Devops implementation of Devops services
 type Devops struct {
-	coord             peer.MessageHandlerCoordinator
-	isSecurityEnabled bool
-	bindingMap        *bindingMap
-}
-
-func (b *bindingMap) getKeyFromBinding(binding []byte) string {
-	return base64.StdEncoding.EncodeToString(binding)
-}
-
-func (b *bindingMap) addBinding(bindingToAdd []byte, txHandler crypto.TransactionHandler) {
-	b.Lock()
-	defer b.Unlock()
-	key := b.getKeyFromBinding(bindingToAdd)
-	b.m[key] = txHandler
-}
-
-func (b *bindingMap) getTxHandlerForBinding(binding []byte) (crypto.TransactionHandler, error) {
-	b.Lock()
-	defer b.Unlock()
-	key := b.getKeyFromBinding(binding)
-	txHandler, ok := b.m[key]
-	if ok != true {
-		// TXhandler not found by key, return error
-		return nil, fmt.Errorf("Transaction handler not found for binding key = %s", key)
-	}
-	return txHandler, nil
+	coord peer.MessageHandlerCoordinator
 }
 
 // Login establishes the security context with the Devops service
@@ -101,7 +65,7 @@ func (*Devops) Build(context context.Context, spec *pb.ChaincodeSpec) (*pb.Chain
 	mode := viper.GetString("chaincode.mode")
 	var codePackageBytes []byte
 	if mode != chaincode.DevModeUserRunsChaincode {
-		devopsLogger.Debugf("Received build request for chaincode spec: %v", spec)
+		devopsLogger.Debug("Received build request for chaincode spec: %v", spec)
 		if err := CheckSpec(spec); err != nil {
 			return nil, err
 		}
@@ -127,7 +91,7 @@ func (*Devops) getChaincodeBytes(context context.Context, spec *pb.ChaincodeSpec
 	mode := viper.GetString("chaincode.mode")
 	var codePackageBytes []byte
 	if mode != chaincode.DevModeUserRunsChaincode {
-		devopsLogger.Debugf("Received build request for chaincode spec: %v", spec)
+		devopsLogger.Debug("Received build request for chaincode spec: %v", spec)
 		var err error
 		if err = CheckSpec(spec); err != nil {
 			return nil, err
@@ -161,9 +125,9 @@ func (d *Devops) Deploy(ctx context.Context, spec *pb.ChaincodeSpec) (*pb.Chainc
 	var tx *pb.Transaction
 	var sec crypto.Client
 
-	if peer.SecurityEnabled() {
+	if viper.GetBool("security.enabled") {
 		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debugf("Initializing secure devops using context %s", spec.SecureContext)
+			devopsLogger.Debug("Initializing secure devops using context %s", spec.SecureContext)
 		}
 		sec, err = crypto.InitClient(spec.SecureContext, nil)
 		defer crypto.CloseClient(sec)
@@ -176,15 +140,15 @@ func (d *Devops) Deploy(ctx context.Context, spec *pb.ChaincodeSpec) (*pb.Chainc
 		}
 
 		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debugf("Creating secure transaction %s", transID)
+			devopsLogger.Debug("Creating secure transaction %s", transID)
 		}
-		tx, err = sec.NewChaincodeDeployTransaction(chaincodeDeploymentSpec, transID, spec.Attributes...)
+		tx, err = sec.NewChaincodeDeployTransaction(chaincodeDeploymentSpec, transID)
 		if nil != err {
 			return nil, err
 		}
 	} else {
 		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debugf("Creating deployment transaction (%s)", transID)
+			devopsLogger.Debug("Creating deployment transaction (%s)", transID)
 		}
 		tx, err = pb.NewChaincodeDeployTransaction(chaincodeDeploymentSpec, transID)
 		if err != nil {
@@ -193,7 +157,7 @@ func (d *Devops) Deploy(ctx context.Context, spec *pb.ChaincodeSpec) (*pb.Chainc
 	}
 
 	if devopsLogger.IsEnabledFor(logging.DEBUG) {
-		devopsLogger.Debugf("Sending deploy transaction (%s) to validator", tx.Uuid)
+		devopsLogger.Debug("Sending deploy transaction (%s) to validator", tx.Uuid)
 	}
 	resp := d.coord.ExecuteTransaction(tx)
 	if resp.Status == pb.Response_FAILURE {
@@ -203,31 +167,20 @@ func (d *Devops) Deploy(ctx context.Context, spec *pb.ChaincodeSpec) (*pb.Chainc
 	return chaincodeDeploymentSpec, err
 }
 
-func (d *Devops) invokeOrQuery(ctx context.Context, chaincodeInvocationSpec *pb.ChaincodeInvocationSpec, attributes []string, invoke bool) (*pb.Response, error) {
+func (d *Devops) invokeOrQuery(ctx context.Context, chaincodeInvocationSpec *pb.ChaincodeInvocationSpec, invoke bool) (*pb.Response, error) {
 
 	if chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name == "" {
 		return nil, fmt.Errorf("name not given for invoke/query")
 	}
 
 	// Now create the Transactions message and send to Peer.
-	var customIDgenAlg = strings.ToLower(chaincodeInvocationSpec.IdGenerationAlg)
-	var id string
-	var generr error
-	if customIDgenAlg != "" {
-		id, generr = util.GenerateIDWithAlg(customIDgenAlg, chaincodeInvocationSpec.ChaincodeSpec.CtorMsg.Args[0])
-		if generr != nil {
-			return nil, generr
-		}
-	} else {
-		id = util.GenerateUUID()
-	}
-	devopsLogger.Infof("Transaction ID: %v", id)
+	uuid := util.GenerateUUID()
 	var transaction *pb.Transaction
 	var err error
 	var sec crypto.Client
-	if peer.SecurityEnabled() {
+	if viper.GetBool("security.enabled") {
 		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debugf("Initializing secure devops using context %s", chaincodeInvocationSpec.ChaincodeSpec.SecureContext)
+			devopsLogger.Debug("Initializing secure devops using context %s", chaincodeInvocationSpec.ChaincodeSpec.SecureContext)
 		}
 		sec, err = crypto.InitClient(chaincodeInvocationSpec.ChaincodeSpec.SecureContext, nil)
 		defer crypto.CloseClient(sec)
@@ -237,13 +190,12 @@ func (d *Devops) invokeOrQuery(ctx context.Context, chaincodeInvocationSpec *pb.
 			return nil, err
 		}
 	}
-
-	transaction, err = d.createExecTx(chaincodeInvocationSpec, attributes, id, invoke, sec)
+	transaction, err = d.createExecTx(chaincodeInvocationSpec, uuid, invoke, sec)
 	if err != nil {
 		return nil, err
 	}
 	if devopsLogger.IsEnabledFor(logging.DEBUG) {
-		devopsLogger.Debugf("Sending invocation transaction (%s) to validator", transaction.Uuid)
+		devopsLogger.Debug("Sending invocation transaction (%s) to validator", transaction.Uuid)
 	}
 	resp := d.coord.ExecuteTransaction(transaction)
 	if resp.Status == pb.Response_FAILURE {
@@ -251,7 +203,7 @@ func (d *Devops) invokeOrQuery(ctx context.Context, chaincodeInvocationSpec *pb.
 	} else {
 		if !invoke && nil != sec && viper.GetBool("security.privacy") {
 			if resp.Msg, err = sec.DecryptQueryResult(transaction, resp.Msg); nil != err {
-				devopsLogger.Errorf("Failed decrypting query transaction result %s", string(resp.Msg[:]))
+				devopsLogger.Debug("Failed decrypting query transaction result %s", string(resp.Msg[:]))
 				//resp = &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}
 			}
 		}
@@ -259,26 +211,24 @@ func (d *Devops) invokeOrQuery(ctx context.Context, chaincodeInvocationSpec *pb.
 	return resp, err
 }
 
-func (d *Devops) createExecTx(spec *pb.ChaincodeInvocationSpec, attributes []string, uuid string, invokeTx bool, sec crypto.Client) (*pb.Transaction, error) {
+func (d *Devops) createExecTx(spec *pb.ChaincodeInvocationSpec, uuid string, invokeTx bool, sec crypto.Client) (*pb.Transaction, error) {
 	var tx *pb.Transaction
 	var err error
-
-	//TODO What should we do with the attributes
 	if nil != sec {
 		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debugf("Creating secure invocation transaction %s", uuid)
+			devopsLogger.Debug("Creating secure invocation transaction %s", uuid)
 		}
 		if invokeTx {
-			tx, err = sec.NewChaincodeExecute(spec, uuid, attributes...)
+			tx, err = sec.NewChaincodeExecute(spec, uuid)
 		} else {
-			tx, err = sec.NewChaincodeQuery(spec, uuid, attributes...)
+			tx, err = sec.NewChaincodeQuery(spec, uuid)
 		}
 		if nil != err {
 			return nil, err
 		}
 	} else {
 		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debugf("Creating invocation transaction (%s)", uuid)
+			devopsLogger.Debug("Creating invocation transaction (%s)", uuid)
 		}
 		var t pb.Transaction_Type
 		if invokeTx {
@@ -296,12 +246,12 @@ func (d *Devops) createExecTx(spec *pb.ChaincodeInvocationSpec, attributes []str
 
 // Invoke performs the supplied invocation on the specified chaincode through a transaction
 func (d *Devops) Invoke(ctx context.Context, chaincodeInvocationSpec *pb.ChaincodeInvocationSpec) (*pb.Response, error) {
-	return d.invokeOrQuery(ctx, chaincodeInvocationSpec, chaincodeInvocationSpec.ChaincodeSpec.Attributes, true)
+	return d.invokeOrQuery(ctx, chaincodeInvocationSpec, true)
 }
 
 // Query performs the supplied query on the specified chaincode through a transaction
 func (d *Devops) Query(ctx context.Context, chaincodeInvocationSpec *pb.ChaincodeInvocationSpec) (*pb.Response, error) {
-	return d.invokeOrQuery(ctx, chaincodeInvocationSpec, chaincodeInvocationSpec.ChaincodeSpec.Attributes, false)
+	return d.invokeOrQuery(ctx, chaincodeInvocationSpec, false)
 }
 
 // CheckSpec to see if chaincode resides within current package capture for language.
@@ -317,149 +267,4 @@ func CheckSpec(spec *pb.ChaincodeSpec) error {
 	}
 
 	return platform.ValidateSpec(spec)
-}
-
-// EXP_GetApplicationTCert retrieves an application TCert for the supplied user
-func (d *Devops) EXP_GetApplicationTCert(ctx context.Context, secret *pb.Secret) (*pb.Response, error) {
-	var sec crypto.Client
-	var err error
-
-	if d.isSecurityEnabled {
-		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debug("Initializing secure devops using context %s", secret.EnrollId)
-		}
-		sec, err = crypto.InitClient(secret.EnrollId, nil)
-		defer crypto.CloseClient(sec)
-
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-
-		devopsLogger.Debug("Getting TCert for id: %s", secret.EnrollId)
-		tcertHandler, err := sec.GetTCertificateHandlerNext()
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-		certDER := tcertHandler.GetCertificate()
-		return &pb.Response{Status: pb.Response_SUCCESS, Msg: certDER}, nil
-	}
-	devopsLogger.Warning("Security NOT enabled")
-	return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte("Security NOT enabled")}, nil
-	// TODO: Handle timeout and expiration
-}
-
-// EXP_PrepareForTx prepares a binding/TXHandler pair to be used in subsequent TX
-func (d *Devops) EXP_PrepareForTx(ctx context.Context, secret *pb.Secret) (*pb.Response, error) {
-	var sec crypto.Client
-	var err error
-	var txHandler crypto.TransactionHandler
-	var binding []byte
-
-	if d.isSecurityEnabled {
-		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debug("Initializing secure devops using context %s", secret.EnrollId)
-		}
-		sec, err = crypto.InitClient(secret.EnrollId, nil)
-		defer crypto.CloseClient(sec)
-
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-
-		devopsLogger.Debug("Getting TXHandler for id: %s", secret.EnrollId)
-		tcertHandler, err := sec.GetTCertificateHandlerNext()
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-		txHandler, err = tcertHandler.GetTransactionHandler()
-		binding, err = txHandler.GetBinding()
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-		// Now add to binding map
-		d.bindingMap.addBinding(binding, txHandler)
-		return &pb.Response{Status: pb.Response_SUCCESS, Msg: binding}, nil
-	}
-	devopsLogger.Warning("Security NOT enabled")
-	return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte("Security NOT enabled")}, nil
-	// TODO: Handle timeout and expiration
-}
-
-// EXP_ProduceSigma produces a sigma as []byte and returns in response
-func (d *Devops) EXP_ProduceSigma(ctx context.Context, sigmaInput *pb.SigmaInput) (*pb.Response, error) {
-	var sec crypto.Client
-	var err error
-	var sigma []byte
-	secret := sigmaInput.Secret
-
-	type RBACMetatdata struct {
-		Cert  []byte
-		Sigma []byte
-	}
-
-	if d.isSecurityEnabled {
-		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debug("Initializing secure devops using context %s", secret.EnrollId)
-		}
-		sec, err = crypto.InitClient(secret.EnrollId, nil)
-		defer crypto.CloseClient(sec)
-
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-
-		devopsLogger.Debug("Getting TCertHandler for id: %s, from DER = %s", secret.EnrollId, sigmaInput.AppTCert)
-		tcertHandler, err := sec.GetTCertificateHandlerFromDER(sigmaInput.AppTCert)
-		//tcertHandler, err := sec.GetTCertificateHandlerNext()
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(fmt.Errorf("Error getting TCertHandler from DER:  %s", err).Error())}, nil
-		}
-		tcert := sigmaInput.AppTCert //tcertHandler.GetCertificate()
-		sigma, err = tcertHandler.Sign(append(tcert, sigmaInput.Data...))
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(fmt.Errorf("Error signing with TCertHandler from DER:  %s", err).Error())}, nil
-		}
-		// Produce the SigmaOutput
-		asn1Encoding, err := asn1.Marshal(RBACMetatdata{Cert: tcert, Sigma: sigma})
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-		sigmaOutput := &pb.SigmaOutput{Tcert: tcert, Sigma: sigma, Asn1Encoding: asn1Encoding}
-		sigmaOutputBytes, err := proto.Marshal(sigmaOutput)
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-		return &pb.Response{Status: pb.Response_SUCCESS, Msg: sigmaOutputBytes}, nil
-	}
-	devopsLogger.Warning("Security NOT enabled")
-	return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte("Security NOT enabled")}, nil
-
-}
-
-// EXP_ExecuteWithBinding executes a transaction with a specific binding/TXHandler
-func (d *Devops) EXP_ExecuteWithBinding(ctx context.Context, executeWithBinding *pb.ExecuteWithBinding) (*pb.Response, error) {
-
-	if d.isSecurityEnabled {
-		devopsLogger.Debug("Getting TxHandler for binding")
-
-		txHandler, err := d.bindingMap.getTxHandlerForBinding(executeWithBinding.Binding)
-
-		if nil != err {
-			return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}, nil
-		}
-
-		tid := util.GenerateUUID()
-
-		tx, err := txHandler.NewChaincodeExecute(executeWithBinding.ChaincodeInvocationSpec, tid)
-		if err != nil {
-			return nil, fmt.Errorf("Error creating executing with binding:  %s", err)
-		}
-
-		return d.coord.ExecuteTransaction(tx), nil
-		//return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte("NOT IMPLEMENTED")}, nil
-
-		//return &pb.Response{Status: pb.Response_SUCCESS, Msg: sigmaOutputBytes}, nil
-	}
-	devopsLogger.Warning("Security NOT enabled")
-	return &pb.Response{Status: pb.Response_FAILURE, Msg: []byte("Security NOT enabled")}, nil
 }

@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package producer
@@ -23,11 +26,10 @@ import (
 )
 
 type handler struct {
-	ChatStream pb.Events_ChatServer
-	doneChan   chan bool
-	registered bool
-	// PM: this should be a list, add/del, iterate
-	interestedEvents []*pb.Interest
+	ChatStream       pb.Events_ChatServer
+	doneChan         chan bool
+	registered       bool
+	interestedEvents map[string]*pb.Interest
 }
 
 func newEventHandler(stream pb.Events_ChatServer) (*handler, error) {
@@ -35,20 +37,8 @@ func newEventHandler(stream pb.Events_ChatServer) (*handler, error) {
 		ChatStream: stream,
 	}
 	d.doneChan = make(chan bool)
-	return d, nil
-}
 
-func (d *handler) addInterest(interest *pb.Interest) {
-	n := len(d.interestedEvents)
-	if n == cap(d.interestedEvents) {
-		// Slice is full; must grow.
-		// We double its size and add 1, so if the size is zero we still grow.
-		newSlice := make([]*pb.Interest, len(d.interestedEvents), 2*len(d.interestedEvents)+1)
-		copy(newSlice, d.interestedEvents)
-		d.interestedEvents = newSlice
-	}
-	d.interestedEvents = d.interestedEvents[0 : n+1]
-	d.interestedEvents[n] = interest
+	return d, nil
 }
 
 // Stop stops this handler
@@ -59,30 +49,49 @@ func (d *handler) Stop() error {
 	return nil
 }
 
-func (d *handler) register(iMsg []*pb.Interest) error {
+func (d *handler) register(iEvents []*pb.Interest) error {
 	//TODO add the handler to the map for the interested events
 	//if successfully done, continue....
-	for _, v := range iMsg {
-		if err := registerHandler(v, d); err != nil {
-			producerLogger.Errorf("could not register %s", v)
+	d.interestedEvents = make(map[string]*pb.Interest)
+	for _, v := range iEvents {
+		if ie, ok := d.interestedEvents[v.EventType]; ok {
+			producerLogger.Error(fmt.Sprintf("event %s already registered", v.EventType))
+			ie.ResponseType = v.ResponseType
 			continue
 		}
-		d.addInterest(v)
-	}
+		if err := registerHandler(v, d); err != nil {
+			producerLogger.Error(fmt.Sprintf("could not register %s", v))
+			continue
+		}
 
+		d.interestedEvents[v.EventType] = v
+	}
 	return nil
 }
 
 func (d *handler) deregister() {
-	for _, v := range d.interestedEvents {
-		if err := deRegisterHandler(v, d); err != nil {
-			producerLogger.Errorf("could not deregister %s", v)
+	for k, v := range d.interestedEvents {
+		var ie *pb.Interest
+		var ok bool
+		if ie, ok = d.interestedEvents[k]; !ok {
 			continue
 		}
-		v = nil
+		if err := deRegisterHandler(v, d); err != nil {
+			producerLogger.Error(fmt.Sprintf("could not register %s", k))
+			continue
+		}
+		delete(d.interestedEvents, ie.EventType)
 	}
-	// PM the following should release slice and its elements for GC?
-	d.interestedEvents = nil
+}
+
+func (d *handler) responseType(eventType string) pb.Interest_ResponseType {
+	rType := pb.Interest_DONTSEND
+	if d.registered {
+		if ie, _ := d.interestedEvents[eventType]; ie != nil {
+			rType = ie.ResponseType
+		}
+	}
+	return rType
 }
 
 // HandleMessage handles the Openchain messages for the Peer.

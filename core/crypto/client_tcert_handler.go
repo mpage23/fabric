@@ -1,23 +1,6 @@
-/*
-Copyright IBM Corp. 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package crypto
 
 import (
-	"github.com/hyperledger/fabric/core/crypto/primitives"
 	"github.com/hyperledger/fabric/core/crypto/utils"
 	obc "github.com/hyperledger/fabric/protos"
 )
@@ -62,7 +45,7 @@ func (handler *tCertHandlerImpl) GetTransactionHandler() (TransactionHandler, er
 	txHandler := &tCertTransactionHandlerImpl{}
 	err := txHandler.init(handler)
 	if err != nil {
-		handler.client.Errorf("Failed initiliazing transaction handler [%s]", err)
+		handler.client.error("Failed initiliazing transaction handler [%s]", err)
 
 		return nil, err
 	}
@@ -73,14 +56,14 @@ func (handler *tCertHandlerImpl) GetTransactionHandler() (TransactionHandler, er
 func (handler *tCertTransactionHandlerImpl) init(tCertHandler *tCertHandlerImpl) error {
 	nonce, err := tCertHandler.client.createTransactionNonce()
 	if err != nil {
-		tCertHandler.client.Errorf("Failed initiliazing transaction handler [%s]", err)
+		tCertHandler.client.error("Failed initiliazing transaction handler [%s]", err)
 
 		return err
 	}
 
 	handler.tCertHandler = tCertHandler
 	handler.nonce = nonce
-	handler.binding = primitives.Hash(append(handler.tCertHandler.tCert.GetCertificate().Raw, nonce...))
+	handler.binding = utils.Hash(append(handler.tCertHandler.tCert.GetCertificate().Raw, nonce...))
 
 	return nil
 }
@@ -96,16 +79,16 @@ func (handler *tCertTransactionHandlerImpl) GetBinding() ([]byte, error) {
 }
 
 // NewChaincodeDeployTransaction is used to deploy chaincode.
-func (handler *tCertTransactionHandlerImpl) NewChaincodeDeployTransaction(chaincodeDeploymentSpec *obc.ChaincodeDeploymentSpec, uuid string, attributeNames ...string) (*obc.Transaction, error) {
-	return handler.tCertHandler.client.newChaincodeDeployUsingTCert(chaincodeDeploymentSpec, uuid, attributeNames, handler.tCertHandler.tCert, handler.nonce)
+func (handler *tCertTransactionHandlerImpl) NewChaincodeDeployTransaction(chaincodeDeploymentSpec *obc.ChaincodeDeploymentSpec, uuid string) (*obc.Transaction, error) {
+	return handler.tCertHandler.client.newChaincodeDeployUsingTCert(chaincodeDeploymentSpec, uuid, handler.tCertHandler.tCert, handler.nonce)
 }
 
 // NewChaincodeExecute is used to execute chaincode's functions.
-func (handler *tCertTransactionHandlerImpl) NewChaincodeExecute(chaincodeInvocation *obc.ChaincodeInvocationSpec, uuid string, attributeNames ...string) (*obc.Transaction, error) {
-	return handler.tCertHandler.client.newChaincodeExecuteUsingTCert(chaincodeInvocation, uuid, attributeNames, handler.tCertHandler.tCert, handler.nonce)
+func (handler *tCertTransactionHandlerImpl) NewChaincodeExecute(chaincodeInvocation *obc.ChaincodeInvocationSpec, uuid string) (*obc.Transaction, error) {
+	return handler.tCertHandler.client.newChaincodeExecuteUsingTCert(chaincodeInvocation, uuid, handler.tCertHandler.tCert, handler.nonce)
 }
 
 // NewChaincodeQuery is used to query chaincode's functions.
-func (handler *tCertTransactionHandlerImpl) NewChaincodeQuery(chaincodeInvocation *obc.ChaincodeInvocationSpec, uuid string, attributeNames ...string) (*obc.Transaction, error) {
-	return handler.tCertHandler.client.newChaincodeQueryUsingTCert(chaincodeInvocation, uuid, attributeNames, handler.tCertHandler.tCert, handler.nonce)
+func (handler *tCertTransactionHandlerImpl) NewChaincodeQuery(chaincodeInvocation *obc.ChaincodeInvocationSpec, uuid string) (*obc.Transaction, error) {
+	return handler.tCertHandler.client.newChaincodeQueryUsingTCert(chaincodeInvocation, uuid, handler.tCertHandler.tCert, handler.nonce)
 }

@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package consumer
@@ -23,8 +26,11 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 
-	"github.com/hyperledger/fabric/core/comm"
+	"github.com/spf13/viper"
+
 	ehpb "github.com/hyperledger/fabric/protos"
 )
 
@@ -35,6 +41,8 @@ type EventsClient struct {
 	adapter     EventAdapter
 }
 
+const defaultTimeout = time.Second * 3
+
 //NewEventsClient Returns a new grpc.ClientConn to the configured local PEER.
 func NewEventsClient(peerAddress string, adapter EventAdapter) *EventsClient {
 	return &EventsClient{peerAddress, nil, adapter}
@@ -42,10 +50,29 @@ func NewEventsClient(peerAddress string, adapter EventAdapter) *EventsClient {
 
 //newEventsClientConnectionWithAddress Returns a new grpc.ClientConn to the configured local PEER.
 func newEventsClientConnectionWithAddress(peerAddress string) (*grpc.ClientConn, error) {
-	if comm.TLSEnabled() {
-		return comm.NewClientConnectionWithAddress(peerAddress, true, true, comm.InitTLSForPeer())
+	var opts []grpc.DialOption
+	if viper.GetBool("peer.tls.enabled") {
+		var sn string
+		if viper.GetString("peer.tls.serverhostoverride") != "" {
+			sn = viper.GetString("peer.tls.serverhostoverride")
+		}
+		var creds credentials.TransportAuthenticator
+		if viper.GetString("peer.tls.cert.file") != "" {
+			var err error
+			creds, err = credentials.NewClientTLSFromFile(viper.GetString("peer.tls.cert.file"), sn)
+			if err != nil {
+				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+			}
+		} else {
+			creds = credentials.NewClientTLSFromCert(nil, sn)
+		}
+		opts = append(opts, grpc.WithTransportCredentials(creds))
 	}
-	return comm.NewClientConnectionWithAddress(peerAddress, true, false, nil)
+	opts = append(opts, grpc.WithTimeout(defaultTimeout))
+	opts = append(opts, grpc.WithBlock())
+	opts = append(opts, grpc.WithInsecure())
+
+	return grpc.Dial(peerAddress, opts...)
 }
 
 func (ec *EventsClient) register(ies []*ehpb.Interest) error {
@@ -98,7 +125,7 @@ func (ec *EventsClient) processEvents() error {
 			return err
 		}
 		if ec.adapter != nil {
-			cont, err := ec.adapter.Recv(in)
+			cont,err := ec.adapter.Recv(in)
 			if !cont {
 				return err
 			}
@@ -113,7 +140,7 @@ func (ec *EventsClient) Start() error {
 		return fmt.Errorf("Could not create client conn to %s", ec.peerAddress)
 	}
 
-	ies, err := ec.adapter.GetInterestedEvents()
+	ies,err := ec.adapter.GetInterestedEvents()
 	if err != nil {
 		return fmt.Errorf("error getting interested events:%s", err)
 	}
@@ -139,9 +166,5 @@ func (ec *EventsClient) Start() error {
 
 //Stop terminates connection with event hub
 func (ec *EventsClient) Stop() error {
-	if ec.stream == nil {
-		// in case the steam/chat server has not been established earlier, we assume that it's closed, successfully
-		return nil
-	}
 	return ec.stream.CloseSend()
 }

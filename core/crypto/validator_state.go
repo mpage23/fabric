@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package crypto
@@ -24,19 +27,89 @@ import (
 	"crypto/cipher"
 	"encoding/asn1"
 	"encoding/binary"
-
-	"github.com/hyperledger/fabric/core/crypto/primitives"
 	"github.com/hyperledger/fabric/core/crypto/utils"
 	obc "github.com/hyperledger/fabric/protos"
 )
 
 func (validator *validatorImpl) GetStateEncryptor(deployTx, executeTx *obc.Transaction) (StateEncryptor, error) {
 	switch executeTx.ConfidentialityProtocolVersion {
+	case "1.1":
+		return validator.getStateEncryptor1_1(deployTx, executeTx)
 	case "1.2":
 		return validator.getStateEncryptor1_2(deployTx, executeTx)
 	}
 
 	return nil, utils.ErrInvalidConfidentialityLevel
+}
+
+func (validator *validatorImpl) getStateEncryptor1_1(deployTx, executeTx *obc.Transaction) (StateEncryptor, error) {
+	// Check nonce
+	if deployTx.Nonce == nil || len(deployTx.Nonce) == 0 {
+		return nil, errors.New("Invalid deploy nonce.")
+	}
+	if executeTx.Nonce == nil || len(executeTx.Nonce) == 0 {
+		return nil, errors.New("Invalid invoke nonce.")
+	}
+	// Check ChaincodeID
+	if deployTx.ChaincodeID == nil {
+		return nil, errors.New("Invalid deploy chaincodeID.")
+	}
+	if executeTx.ChaincodeID == nil {
+		return nil, errors.New("Invalid execute chaincodeID.")
+	}
+	// Check that deployTx and executeTx refers to the same chaincode
+	if !reflect.DeepEqual(deployTx.ChaincodeID, executeTx.ChaincodeID) {
+		return nil, utils.ErrDifferentChaincodeID
+	}
+	// Check the confidentiality protocol version
+	if deployTx.ConfidentialityProtocolVersion != executeTx.ConfidentialityProtocolVersion {
+		return nil, utils.ErrDifferrentConfidentialityProtocolVersion
+	}
+
+	validator.debug("Parsing transaction. Type [%s]. Confidentiality Protocol Version [%d]", executeTx.Type.String(), executeTx.ConfidentialityProtocolVersion)
+
+	// client.enrollChainKey is an AES key represented as byte array
+	enrollChainKey := validator.enrollChainKey.([]byte)
+
+	if executeTx.Type == obc.Transaction_CHAINCODE_QUERY {
+		validator.debug("Parsing Query transaction...")
+
+		// Compute deployTxKey key from the deploy transaction. This is used to decrypt the actual state
+		// of the chaincode
+		deployTxKey := utils.HMAC(enrollChainKey, deployTx.Nonce)
+
+		// Compute the key used to encrypt the result of the query
+		queryKey := utils.HMACTruncated(enrollChainKey, append([]byte{6}, executeTx.Nonce...), utils.AESKeyLength)
+
+		// Init the state encryptor
+		se := queryStateEncryptor{}
+		err := se.init(validator.nodeImpl, queryKey, deployTxKey)
+		if err != nil {
+			return nil, err
+		}
+
+		return &se, nil
+	}
+
+	// Compute deployTxKey key from the deploy transaction
+	deployTxKey := utils.HMAC(enrollChainKey, deployTx.Nonce)
+
+	// Mask executeTx.Nonce
+	executeTxNonce := utils.HMACTruncated(deployTxKey, utils.Hash(executeTx.Nonce), utils.NonceSize)
+
+	// Compute stateKey to encrypt the states and nonceStateKey to generates IVs. This
+	// allows validators to reach consesus
+	stateKey := utils.HMACTruncated(deployTxKey, append([]byte{3}, executeTxNonce...), utils.AESKeyLength)
+	nonceStateKey := utils.HMAC(deployTxKey, append([]byte{4}, executeTxNonce...))
+
+	// Init the state encryptor
+	se := stateEncryptorImpl{}
+	err := se.init(validator.nodeImpl, stateKey, nonceStateKey, deployTxKey, executeTxNonce)
+	if err != nil {
+		return nil, err
+	}
+
+	return &se, nil
 }
 
 func (validator *validatorImpl) getStateEncryptor1_2(deployTx, executeTx *obc.Transaction) (StateEncryptor, error) {
@@ -63,18 +136,18 @@ func (validator *validatorImpl) getStateEncryptor1_2(deployTx, executeTx *obc.Tr
 		return nil, utils.ErrDifferrentConfidentialityProtocolVersion
 	}
 
-	validator.Debugf("Parsing transaction. Type [%s]. Confidentiality Protocol Version [%s]", executeTx.Type.String(), executeTx.ConfidentialityProtocolVersion)
+	validator.debug("Parsing transaction. Type [%s]. Confidentiality Protocol Version [%s]", executeTx.Type.String(), executeTx.ConfidentialityProtocolVersion)
 
 	deployStateKey, err := validator.getStateKeyFromTransaction(deployTx)
 
 	if executeTx.Type == obc.Transaction_CHAINCODE_QUERY {
-		validator.Debug("Parsing Query transaction...")
+		validator.debug("Parsing Query transaction...")
 
 		executeStateKey, err := validator.getStateKeyFromTransaction(executeTx)
 
 		// Compute deployTxKey key from the deploy transaction. This is used to decrypt the actual state
 		// of the chaincode
-		deployTxKey := primitives.HMAC(deployStateKey, deployTx.Nonce)
+		deployTxKey := utils.HMAC(deployStateKey, deployTx.Nonce)
 
 		// Compute the key used to encrypt the result of the query
 		//queryKey := utils.HMACTruncated(executeStateKey, append([]byte{6}, executeTx.Nonce...), utils.AESKeyLength)
@@ -90,15 +163,15 @@ func (validator *validatorImpl) getStateEncryptor1_2(deployTx, executeTx *obc.Tr
 	}
 
 	// Compute deployTxKey key from the deploy transaction
-	deployTxKey := primitives.HMAC(deployStateKey, deployTx.Nonce)
+	deployTxKey := utils.HMAC(deployStateKey, deployTx.Nonce)
 
 	// Mask executeTx.Nonce
-	executeTxNonce := primitives.HMACTruncated(deployTxKey, primitives.Hash(executeTx.Nonce), primitives.NonceSize)
+	executeTxNonce := utils.HMACTruncated(deployTxKey, utils.Hash(executeTx.Nonce), utils.NonceSize)
 
 	// Compute stateKey to encrypt the states and nonceStateKey to generates IVs. This
 	// allows validators to reach consesus
-	stateKey := primitives.HMACTruncated(deployTxKey, append([]byte{3}, executeTxNonce...), primitives.AESKeyLength)
-	nonceStateKey := primitives.HMAC(deployTxKey, append([]byte{4}, executeTxNonce...))
+	stateKey := utils.HMACTruncated(deployTxKey, append([]byte{3}, executeTxNonce...), utils.AESKeyLength)
+	nonceStateKey := utils.HMAC(deployTxKey, append([]byte{4}, executeTxNonce...))
 
 	// Init the state encryptor
 	se := stateEncryptorImpl{}
@@ -113,20 +186,20 @@ func (validator *validatorImpl) getStateEncryptor1_2(deployTx, executeTx *obc.Tr
 func (validator *validatorImpl) getStateKeyFromTransaction(tx *obc.Transaction) ([]byte, error) {
 	cipher, err := validator.eciesSPI.NewAsymmetricCipherFromPrivateKey(validator.chainPrivateKey)
 	if err != nil {
-		validator.Errorf("Failed init decryption engine [%s].", err.Error())
+		validator.error("Failed init decryption engine [%s].", err.Error())
 		return nil, err
 	}
 
 	msgToValidatorsRaw, err := cipher.Process(tx.ToValidators)
 	if err != nil {
-		validator.Errorf("Failed decrypting message to validators [% x]: [%s].", tx.ToValidators, err.Error())
+		validator.error("Failed decrypting message to validators [% x]: [%s].", tx.ToValidators, err.Error())
 		return nil, err
 	}
 
 	msgToValidators := new(chainCodeValidatorMessage1_2)
 	_, err = asn1.Unmarshal(msgToValidatorsRaw, msgToValidators)
 	if err != nil {
-		validator.Errorf("Failed unmarshalling message to validators [% x]: [%s].", msgToValidators, err.Error())
+		validator.error("Failed unmarshalling message to validators [% x]: [%s].", msgToValidators, err.Error())
 		return nil, err
 	}
 
@@ -178,10 +251,10 @@ func (se *stateEncryptorImpl) Encrypt(msg []byte) ([]byte, error) {
 	var b = make([]byte, 8)
 	binary.BigEndian.PutUint64(b, se.counter)
 
-	se.node.Debugf("Encrypting with counter [% x].", b)
-	//	se.log.Infof("Encrypting with txNonce  ", utils.EncodeBase64(se.txNonce))
+	se.node.debug("Encrypting with counter [% x].", b)
+	//	se.log.Info("Encrypting with txNonce  ", utils.EncodeBase64(se.txNonce))
 
-	nonce := primitives.HMACTruncated(se.nonceStateKey, b, se.nonceSize)
+	nonce := utils.HMACTruncated(se.nonceStateKey, b, se.nonceSize)
 
 	se.counter++
 
@@ -194,25 +267,20 @@ func (se *stateEncryptorImpl) Encrypt(msg []byte) ([]byte, error) {
 }
 
 func (se *stateEncryptorImpl) Decrypt(raw []byte) ([]byte, error) {
-	if len(raw) == 0 {
-		// A nil ciphertext decrypts to nil
-		return nil, nil
-	}
-
-	if len(raw) <= primitives.NonceSize {
+	if len(raw) <= utils.NonceSize {
 		return nil, utils.ErrDecrypt
 	}
 
 	// raw consists of (txNonce, ct)
-	txNonce := raw[:primitives.NonceSize]
-	//	se.log.Infof("Decrypting with txNonce  ", utils.EncodeBase64(txNonce))
-	ct := raw[primitives.NonceSize:]
+	txNonce := raw[:utils.NonceSize]
+	//	se.log.Info("Decrypting with txNonce  ", utils.EncodeBase64(txNonce))
+	ct := raw[utils.NonceSize:]
 
 	nonce := make([]byte, se.nonceSize)
 	copy(nonce, ct)
 
-	key := primitives.HMACTruncated(se.deployTxKey, append([]byte{3}, txNonce...), primitives.AESKeyLength)
-	//	se.log.Infof("Decrypting with key  ", utils.EncodeBase64(key))
+	key := utils.HMACTruncated(se.deployTxKey, append([]byte{3}, txNonce...), utils.AESKeyLength)
+	//	se.log.Info("Decrypting with key  ", utils.EncodeBase64(key))
 	c, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -246,7 +314,7 @@ func (se *queryStateEncryptor) init(node *nodeImpl, queryKey, deployTxKey []byte
 	se.node = node
 	se.deployTxKey = deployTxKey
 
-	//	se.log.Infof("QUERY Encrypting with key  ", utils.EncodeBase64(queryKey))
+	//	se.log.Info("QUERY Encrypting with key  ", utils.EncodeBase64(queryKey))
 
 	// Init aes
 	c, err := aes.NewCipher(queryKey)
@@ -266,9 +334,9 @@ func (se *queryStateEncryptor) init(node *nodeImpl, queryKey, deployTxKey []byte
 }
 
 func (se *queryStateEncryptor) Encrypt(msg []byte) ([]byte, error) {
-	nonce, err := primitives.GetRandomBytes(se.nonceSize)
+	nonce, err := utils.GetRandomBytes(se.nonceSize)
 	if err != nil {
-		se.node.Errorf("Failed getting randomness [%s].", err.Error())
+		se.node.error("Failed getting randomness [%s].", err.Error())
 		return nil, err
 	}
 
@@ -281,25 +349,20 @@ func (se *queryStateEncryptor) Encrypt(msg []byte) ([]byte, error) {
 }
 
 func (se *queryStateEncryptor) Decrypt(raw []byte) ([]byte, error) {
-	if len(raw) == 0 {
-		// A nil ciphertext decrypts to nil
-		return nil, nil
-	}
-
-	if len(raw) <= primitives.NonceSize {
+	if len(raw) <= utils.NonceSize {
 		return nil, utils.ErrDecrypt
 	}
 
 	// raw consists of (txNonce, ct)
-	txNonce := raw[:primitives.NonceSize]
-	//	se.log.Infof("Decrypting with txNonce  ", utils.EncodeBase64(txNonce))
-	ct := raw[primitives.NonceSize:]
+	txNonce := raw[:utils.NonceSize]
+	//	se.log.Info("Decrypting with txNonce  ", utils.EncodeBase64(txNonce))
+	ct := raw[utils.NonceSize:]
 
 	nonce := make([]byte, se.nonceSize)
 	copy(nonce, ct)
 
-	key := primitives.HMACTruncated(se.deployTxKey, append([]byte{3}, txNonce...), primitives.AESKeyLength)
-	//	se.log.Infof("Decrypting with key  ", utils.EncodeBase64(key))
+	key := utils.HMACTruncated(se.deployTxKey, append([]byte{3}, txNonce...), utils.AESKeyLength)
+	//	se.log.Info("Decrypting with key  ", utils.EncodeBase64(key))
 	c, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err

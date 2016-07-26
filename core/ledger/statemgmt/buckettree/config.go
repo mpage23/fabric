@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 package buckettree
@@ -24,10 +27,10 @@ import (
 // ConfigNumBuckets - config name 'numBuckets' as it appears in yaml file
 const ConfigNumBuckets = "numBuckets"
 
-// ConfigMaxGroupingAtEachLevel - config name 'maxGroupingAtEachLevel' as it appears in yaml file
+// ConfigNumBuckets - config name 'maxGroupingAtEachLevel' as it appears in yaml file
 const ConfigMaxGroupingAtEachLevel = "maxGroupingAtEachLevel"
 
-// ConfigHashFunction - config name 'hashFunction'. This is not exposed in yaml file. This configuration is used for testing with custom hash-function
+// ConfigNumBuckets - config name 'hashFunction'. This is not exposed in yaml file. This configuration is used for testing with custom hash-function
 const ConfigHashFunction = "hashFunction"
 
 // DefaultNumBuckets - total buckets
@@ -47,7 +50,7 @@ type config struct {
 }
 
 func initConfig(configs map[string]interface{}) {
-	logger.Infof("configs passed during initialization = %#v", configs)
+	logger.Info("configs passed during initialization = %#v", configs)
 
 	numBuckets, ok := configs[ConfigNumBuckets].(int)
 	if !ok {
@@ -64,7 +67,7 @@ func initConfig(configs map[string]interface{}) {
 		hashFunction = fnvHash
 	}
 	conf = newConfig(numBuckets, maxGroupingAtEachLevel, hashFunction)
-	logger.Infof("Initializing bucket tree state implemetation with configurations %+v", conf)
+	logger.Info("Initializing bucket tree state implemetation with configurations %+v", conf)
 }
 
 func newConfig(numBuckets int, maxGroupingAtEachLevel int, hashFunc hashFunc) *config {
@@ -115,7 +118,7 @@ func (config *config) getNumBucketsAtLowestLevel() int {
 }
 
 func (config *config) computeParentBucketNumber(bucketNumber int) int {
-	logger.Debugf("Computing parent bucket number for bucketNumber [%d]", bucketNumber)
+	logger.Debug("Computing parent bucket number for bucketNumber [%d]", bucketNumber)
 	parentBucketNumber := bucketNumber / config.getMaxGroupingAtEachLevel()
 	if bucketNumber%config.getMaxGroupingAtEachLevel() != 0 {
 		parentBucketNumber++

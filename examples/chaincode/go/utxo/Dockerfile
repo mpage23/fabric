@@ -1,4 +1,4 @@
-from hyperledger/fabric-baseimage
+from openblockchain/baseimage
 
 RUN apt-get update && apt-get install pkg-config autoconf libtool -y
 RUN cd /tmp && git clone https://github.com/bitcoin/secp256k1.git && cd secp256k1/

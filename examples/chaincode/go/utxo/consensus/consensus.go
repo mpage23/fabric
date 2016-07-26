@@ -85,13 +85,18 @@ import "unsafe"
 import _ "runtime/cgo"
 import "sync"
 
+
 type _ unsafe.Pointer
+
+
 
 var Swig_escape_always_false bool
 var Swig_escape_val interface{}
 
+
 type _swig_fnptr *byte
 type _swig_memberptr *byte
+
 
 type _ sync.Mutex
 
@@ -104,9 +109,7 @@ const LIBBITCOIN_CONSENSUS_VERSION string = "2.0.0"
 const LIBBITCOIN_CONSENSUS_MAJOR_VERSION int = 2
 const LIBBITCOIN_CONSENSUS_MINOR_VERSION int = 0
 const LIBBITCOIN_CONSENSUS_PATCH_VERSION int = 0
-
 type LibbitcoinConsensusVerify_result_type int
-
 func _swig_getverify_result_eval_false() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_eval_false_consensus_0731991c73947514())
@@ -114,7 +117,6 @@ func _swig_getverify_result_eval_false() (_swig_ret LibbitcoinConsensusVerify_re
 }
 
 var Verify_result_eval_false LibbitcoinConsensusVerify_result_type = _swig_getverify_result_eval_false()
-
 func _swig_getverify_result_eval_true() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_eval_true_consensus_0731991c73947514())
@@ -122,7 +124,6 @@ func _swig_getverify_result_eval_true() (_swig_ret LibbitcoinConsensusVerify_res
 }
 
 var Verify_result_eval_true LibbitcoinConsensusVerify_result_type = _swig_getverify_result_eval_true()
-
 func _swig_getverify_result_script_size() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_script_size_consensus_0731991c73947514())
@@ -130,7 +131,6 @@ func _swig_getverify_result_script_size() (_swig_ret LibbitcoinConsensusVerify_r
 }
 
 var Verify_result_script_size LibbitcoinConsensusVerify_result_type = _swig_getverify_result_script_size()
-
 func _swig_getverify_result_push_size() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_push_size_consensus_0731991c73947514())
@@ -138,7 +138,6 @@ func _swig_getverify_result_push_size() (_swig_ret LibbitcoinConsensusVerify_res
 }
 
 var Verify_result_push_size LibbitcoinConsensusVerify_result_type = _swig_getverify_result_push_size()
-
 func _swig_getverify_result_op_count() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_op_count_consensus_0731991c73947514())
@@ -146,7 +145,6 @@ func _swig_getverify_result_op_count() (_swig_ret LibbitcoinConsensusVerify_resu
 }
 
 var Verify_result_op_count LibbitcoinConsensusVerify_result_type = _swig_getverify_result_op_count()
-
 func _swig_getverify_result_stack_size() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_stack_size_consensus_0731991c73947514())
@@ -154,7 +152,6 @@ func _swig_getverify_result_stack_size() (_swig_ret LibbitcoinConsensusVerify_re
 }
 
 var Verify_result_stack_size LibbitcoinConsensusVerify_result_type = _swig_getverify_result_stack_size()
-
 func _swig_getverify_result_sig_count() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_sig_count_consensus_0731991c73947514())
@@ -162,7 +159,6 @@ func _swig_getverify_result_sig_count() (_swig_ret LibbitcoinConsensusVerify_res
 }
 
 var Verify_result_sig_count LibbitcoinConsensusVerify_result_type = _swig_getverify_result_sig_count()
-
 func _swig_getverify_result_pubkey_count() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_pubkey_count_consensus_0731991c73947514())
@@ -170,7 +166,6 @@ func _swig_getverify_result_pubkey_count() (_swig_ret LibbitcoinConsensusVerify_
 }
 
 var Verify_result_pubkey_count LibbitcoinConsensusVerify_result_type = _swig_getverify_result_pubkey_count()
-
 func _swig_getverify_result_verify() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_verify_consensus_0731991c73947514())
@@ -178,7 +173,6 @@ func _swig_getverify_result_verify() (_swig_ret LibbitcoinConsensusVerify_result
 }
 
 var Verify_result_verify LibbitcoinConsensusVerify_result_type = _swig_getverify_result_verify()
-
 func _swig_getverify_result_equalverify() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_equalverify_consensus_0731991c73947514())
@@ -186,7 +180,6 @@ func _swig_getverify_result_equalverify() (_swig_ret LibbitcoinConsensusVerify_r
 }
 
 var Verify_result_equalverify LibbitcoinConsensusVerify_result_type = _swig_getverify_result_equalverify()
-
 func _swig_getverify_result_checkmultisigverify() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_checkmultisigverify_consensus_0731991c73947514())
@@ -194,7 +187,6 @@ func _swig_getverify_result_checkmultisigverify() (_swig_ret LibbitcoinConsensus
 }
 
 var Verify_result_checkmultisigverify LibbitcoinConsensusVerify_result_type = _swig_getverify_result_checkmultisigverify()
-
 func _swig_getverify_result_checksigverify() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_checksigverify_consensus_0731991c73947514())
@@ -202,7 +194,6 @@ func _swig_getverify_result_checksigverify() (_swig_ret LibbitcoinConsensusVerif
 }
 
 var Verify_result_checksigverify LibbitcoinConsensusVerify_result_type = _swig_getverify_result_checksigverify()
-
 func _swig_getverify_result_numequalverify() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_numequalverify_consensus_0731991c73947514())
@@ -210,7 +201,6 @@ func _swig_getverify_result_numequalverify() (_swig_ret LibbitcoinConsensusVerif
 }
 
 var Verify_result_numequalverify LibbitcoinConsensusVerify_result_type = _swig_getverify_result_numequalverify()
-
 func _swig_getverify_result_bad_opcode() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_bad_opcode_consensus_0731991c73947514())
@@ -218,7 +208,6 @@ func _swig_getverify_result_bad_opcode() (_swig_ret LibbitcoinConsensusVerify_re
 }
 
 var Verify_result_bad_opcode LibbitcoinConsensusVerify_result_type = _swig_getverify_result_bad_opcode()
-
 func _swig_getverify_result_disabled_opcode() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_disabled_opcode_consensus_0731991c73947514())
@@ -226,7 +215,6 @@ func _swig_getverify_result_disabled_opcode() (_swig_ret LibbitcoinConsensusVeri
 }
 
 var Verify_result_disabled_opcode LibbitcoinConsensusVerify_result_type = _swig_getverify_result_disabled_opcode()
-
 func _swig_getverify_result_invalid_stack_operation() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_invalid_stack_operation_consensus_0731991c73947514())
@@ -234,7 +222,6 @@ func _swig_getverify_result_invalid_stack_operation() (_swig_ret LibbitcoinConse
 }
 
 var Verify_result_invalid_stack_operation LibbitcoinConsensusVerify_result_type = _swig_getverify_result_invalid_stack_operation()
-
 func _swig_getverify_result_invalid_altstack_operation() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_invalid_altstack_operation_consensus_0731991c73947514())
@@ -242,7 +229,6 @@ func _swig_getverify_result_invalid_altstack_operation() (_swig_ret LibbitcoinCo
 }
 
 var Verify_result_invalid_altstack_operation LibbitcoinConsensusVerify_result_type = _swig_getverify_result_invalid_altstack_operation()
-
 func _swig_getverify_result_unbalanced_conditional() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_unbalanced_conditional_consensus_0731991c73947514())
@@ -250,7 +236,6 @@ func _swig_getverify_result_unbalanced_conditional() (_swig_ret LibbitcoinConsen
 }
 
 var Verify_result_unbalanced_conditional LibbitcoinConsensusVerify_result_type = _swig_getverify_result_unbalanced_conditional()
-
 func _swig_getverify_result_sig_hashtype() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_sig_hashtype_consensus_0731991c73947514())
@@ -258,7 +243,6 @@ func _swig_getverify_result_sig_hashtype() (_swig_ret LibbitcoinConsensusVerify_
 }
 
 var Verify_result_sig_hashtype LibbitcoinConsensusVerify_result_type = _swig_getverify_result_sig_hashtype()
-
 func _swig_getverify_result_sig_der() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_sig_der_consensus_0731991c73947514())
@@ -266,7 +250,6 @@ func _swig_getverify_result_sig_der() (_swig_ret LibbitcoinConsensusVerify_resul
 }
 
 var Verify_result_sig_der LibbitcoinConsensusVerify_result_type = _swig_getverify_result_sig_der()
-
 func _swig_getverify_result_minimaldata() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_minimaldata_consensus_0731991c73947514())
@@ -274,7 +257,6 @@ func _swig_getverify_result_minimaldata() (_swig_ret LibbitcoinConsensusVerify_r
 }
 
 var Verify_result_minimaldata LibbitcoinConsensusVerify_result_type = _swig_getverify_result_minimaldata()
-
 func _swig_getverify_result_sig_pushonly() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_sig_pushonly_consensus_0731991c73947514())
@@ -282,7 +264,6 @@ func _swig_getverify_result_sig_pushonly() (_swig_ret LibbitcoinConsensusVerify_
 }
 
 var Verify_result_sig_pushonly LibbitcoinConsensusVerify_result_type = _swig_getverify_result_sig_pushonly()
-
 func _swig_getverify_result_sig_high_s() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_sig_high_s_consensus_0731991c73947514())
@@ -290,7 +271,6 @@ func _swig_getverify_result_sig_high_s() (_swig_ret LibbitcoinConsensusVerify_re
 }
 
 var Verify_result_sig_high_s LibbitcoinConsensusVerify_result_type = _swig_getverify_result_sig_high_s()
-
 func _swig_getverify_result_sig_nulldummy() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_sig_nulldummy_consensus_0731991c73947514())
@@ -298,7 +278,6 @@ func _swig_getverify_result_sig_nulldummy() (_swig_ret LibbitcoinConsensusVerify
 }
 
 var Verify_result_sig_nulldummy LibbitcoinConsensusVerify_result_type = _swig_getverify_result_sig_nulldummy()
-
 func _swig_getverify_result_pubkeytype() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_pubkeytype_consensus_0731991c73947514())
@@ -306,7 +285,6 @@ func _swig_getverify_result_pubkeytype() (_swig_ret LibbitcoinConsensusVerify_re
 }
 
 var Verify_result_pubkeytype LibbitcoinConsensusVerify_result_type = _swig_getverify_result_pubkeytype()
-
 func _swig_getverify_result_cleanstack() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_cleanstack_consensus_0731991c73947514())
@@ -314,7 +292,6 @@ func _swig_getverify_result_cleanstack() (_swig_ret LibbitcoinConsensusVerify_re
 }
 
 var Verify_result_cleanstack LibbitcoinConsensusVerify_result_type = _swig_getverify_result_cleanstack()
-
 func _swig_getverify_result_discourage_upgradable_nops() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_discourage_upgradable_nops_consensus_0731991c73947514())
@@ -322,7 +299,6 @@ func _swig_getverify_result_discourage_upgradable_nops() (_swig_ret LibbitcoinCo
 }
 
 var Verify_result_discourage_upgradable_nops LibbitcoinConsensusVerify_result_type = _swig_getverify_result_discourage_upgradable_nops()
-
 func _swig_getverify_result_op_return() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_op_return_consensus_0731991c73947514())
@@ -330,7 +306,6 @@ func _swig_getverify_result_op_return() (_swig_ret LibbitcoinConsensusVerify_res
 }
 
 var Verify_result_op_return LibbitcoinConsensusVerify_result_type = _swig_getverify_result_op_return()
-
 func _swig_getverify_result_unknown_error() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_unknown_error_consensus_0731991c73947514())
@@ -338,7 +313,6 @@ func _swig_getverify_result_unknown_error() (_swig_ret LibbitcoinConsensusVerify
 }
 
 var Verify_result_unknown_error LibbitcoinConsensusVerify_result_type = _swig_getverify_result_unknown_error()
-
 func _swig_getverify_result_tx_invalid() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_tx_invalid_consensus_0731991c73947514())
@@ -346,7 +320,6 @@ func _swig_getverify_result_tx_invalid() (_swig_ret LibbitcoinConsensusVerify_re
 }
 
 var Verify_result_tx_invalid LibbitcoinConsensusVerify_result_type = _swig_getverify_result_tx_invalid()
-
 func _swig_getverify_result_tx_size_invalid() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_tx_size_invalid_consensus_0731991c73947514())
@@ -354,7 +327,6 @@ func _swig_getverify_result_tx_size_invalid() (_swig_ret LibbitcoinConsensusVeri
 }
 
 var Verify_result_tx_size_invalid LibbitcoinConsensusVerify_result_type = _swig_getverify_result_tx_size_invalid()
-
 func _swig_getverify_result_tx_input_invalid() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_tx_input_invalid_consensus_0731991c73947514())
@@ -362,7 +334,6 @@ func _swig_getverify_result_tx_input_invalid() (_swig_ret LibbitcoinConsensusVer
 }
 
 var Verify_result_tx_input_invalid LibbitcoinConsensusVerify_result_type = _swig_getverify_result_tx_input_invalid()
-
 func _swig_getverify_result_negative_locktime() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_negative_locktime_consensus_0731991c73947514())
@@ -370,7 +341,6 @@ func _swig_getverify_result_negative_locktime() (_swig_ret LibbitcoinConsensusVe
 }
 
 var Verify_result_negative_locktime LibbitcoinConsensusVerify_result_type = _swig_getverify_result_negative_locktime()
-
 func _swig_getverify_result_unsatisfied_locktime() (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_result_unsatisfied_locktime_consensus_0731991c73947514())
@@ -378,9 +348,7 @@ func _swig_getverify_result_unsatisfied_locktime() (_swig_ret LibbitcoinConsensu
 }
 
 var Verify_result_unsatisfied_locktime LibbitcoinConsensusVerify_result_type = _swig_getverify_result_unsatisfied_locktime()
-
 type LibbitcoinConsensusVerify_flags_type int
-
 func _swig_getverify_flags_none() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_none_consensus_0731991c73947514())
@@ -388,7 +356,6 @@ func _swig_getverify_flags_none() (_swig_ret LibbitcoinConsensusVerify_flags_typ
 }
 
 var Verify_flags_none LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_none()
-
 func _swig_getverify_flags_p2sh() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_p2sh_consensus_0731991c73947514())
@@ -396,7 +363,6 @@ func _swig_getverify_flags_p2sh() (_swig_ret LibbitcoinConsensusVerify_flags_typ
 }
 
 var Verify_flags_p2sh LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_p2sh()
-
 func _swig_getverify_flags_strictenc() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_strictenc_consensus_0731991c73947514())
@@ -404,7 +370,6 @@ func _swig_getverify_flags_strictenc() (_swig_ret LibbitcoinConsensusVerify_flag
 }
 
 var Verify_flags_strictenc LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_strictenc()
-
 func _swig_getverify_flags_dersig() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_dersig_consensus_0731991c73947514())
@@ -412,7 +377,6 @@ func _swig_getverify_flags_dersig() (_swig_ret LibbitcoinConsensusVerify_flags_t
 }
 
 var Verify_flags_dersig LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_dersig()
-
 func _swig_getverify_flags_low_s() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_low_s_consensus_0731991c73947514())
@@ -420,7 +384,6 @@ func _swig_getverify_flags_low_s() (_swig_ret LibbitcoinConsensusVerify_flags_ty
 }
 
 var Verify_flags_low_s LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_low_s()
-
 func _swig_getverify_flags_nulldummy() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_nulldummy_consensus_0731991c73947514())
@@ -428,7 +391,6 @@ func _swig_getverify_flags_nulldummy() (_swig_ret LibbitcoinConsensusVerify_flag
 }
 
 var Verify_flags_nulldummy LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_nulldummy()
-
 func _swig_getverify_flags_sigpushonly() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_sigpushonly_consensus_0731991c73947514())
@@ -436,7 +398,6 @@ func _swig_getverify_flags_sigpushonly() (_swig_ret LibbitcoinConsensusVerify_fl
 }
 
 var Verify_flags_sigpushonly LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_sigpushonly()
-
 func _swig_getverify_flags_minimaldata() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_minimaldata_consensus_0731991c73947514())
@@ -444,7 +405,6 @@ func _swig_getverify_flags_minimaldata() (_swig_ret LibbitcoinConsensusVerify_fl
 }
 
 var Verify_flags_minimaldata LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_minimaldata()
-
 func _swig_getverify_flags_discourage_upgradable_nops() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_discourage_upgradable_nops_consensus_0731991c73947514())
@@ -452,7 +412,6 @@ func _swig_getverify_flags_discourage_upgradable_nops() (_swig_ret LibbitcoinCon
 }
 
 var Verify_flags_discourage_upgradable_nops LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_discourage_upgradable_nops()
-
 func _swig_getverify_flags_cleanstack() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_cleanstack_consensus_0731991c73947514())
@@ -460,7 +419,6 @@ func _swig_getverify_flags_cleanstack() (_swig_ret LibbitcoinConsensusVerify_fla
 }
 
 var Verify_flags_cleanstack LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_cleanstack()
-
 func _swig_getverify_flags_checklocktimeverify() (_swig_ret LibbitcoinConsensusVerify_flags_type) {
 	var swig_r LibbitcoinConsensusVerify_flags_type
 	swig_r = (LibbitcoinConsensusVerify_flags_type)(C._wrap_verify_flags_checklocktimeverify_consensus_0731991c73947514())
@@ -468,7 +426,6 @@ func _swig_getverify_flags_checklocktimeverify() (_swig_ret LibbitcoinConsensusV
 }
 
 var Verify_flags_checklocktimeverify LibbitcoinConsensusVerify_flags_type = _swig_getverify_flags_checklocktimeverify()
-
 func Verify_script(arg1 *byte, arg2 int64, arg3 *byte, arg4 int64, arg5 uint, arg6 uint) (_swig_ret LibbitcoinConsensusVerify_result_type) {
 	var swig_r LibbitcoinConsensusVerify_result_type
 	_swig_i_0 := arg1
@@ -480,3 +437,5 @@ func Verify_script(arg1 *byte, arg2 int64, arg3 *byte, arg4 int64, arg5 uint, ar
 	swig_r = (LibbitcoinConsensusVerify_result_type)(C._wrap_verify_script_consensus_0731991c73947514(C.swig_voidp(_swig_i_0), C.swig_type_1(_swig_i_1), C.swig_voidp(_swig_i_2), C.swig_type_2(_swig_i_3), C.swig_intgo(_swig_i_4), C.swig_intgo(_swig_i_5)))
 	return swig_r
 }
+
+

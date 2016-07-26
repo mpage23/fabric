@@ -1,17 +1,20 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
 
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 */
 
 // The 'viper' package for configuration handling is very flexible, but has
@@ -45,14 +48,15 @@ var configurationCached = false
 // getValidatorStreamAddress(), and getPeerEndpoint()
 var localAddress string
 var localAddressError error
+var validatorStreamAddress string
 var peerEndpoint *pb.PeerEndpoint
 var peerEndpointError error
 
 // Cached values of commonly used configuration constants.
 var syncStateSnapshotChannelSize int
 var syncStateDeltasChannelSize int
-var syncBlocksChannelSize int
 var validatorEnabled bool
+var tlsEnabled bool
 
 // Note: There is some kind of circular import issue that prevents us from
 // importing the "core" package into the "peer" package. The
@@ -60,7 +64,7 @@ var validatorEnabled bool
 // bit.
 var securityEnabled bool
 
-// CacheConfiguration computes and caches commonly-used constants and
+// CacheConfiguration() computes and caches commonly-used constants and
 // computed constants as package variables. Routines which were previously
 // global have been embedded here to preserve the original abstraction.
 func CacheConfiguration() (err error) {
@@ -75,11 +79,22 @@ func CacheConfiguration() (err error) {
 				return "", err
 			}
 			peerAddress = net.JoinHostPort(GetLocalIP(), port)
-			peerLogger.Infof("Auto detected peer address: %s", peerAddress)
+			peerLogger.Info("Auto detected peer address: %s", peerAddress)
 		} else {
 			peerAddress = viper.GetString("peer.address")
 		}
 		return
+	}
+
+	// getValidatorStreamAddress returns the address to stream requests to
+	getValidatorStreamAddress := func() string {
+		localaddr, _ := getLocalAddress()
+		if viper.GetBool("peer.validator.enabled") { // in validator mode, send your own address
+			return localaddr
+		} else if valaddr := viper.GetString("peer.discovery.rootnode"); valaddr != "" {
+			return valaddr
+		}
+		return localaddr
 	}
 
 	// getPeerEndpoint returns the PeerEndpoint for this Peer instance.  Affected by env:peer.addressAutoDetect
@@ -100,11 +115,12 @@ func CacheConfiguration() (err error) {
 
 	localAddress, localAddressError = getLocalAddress()
 	peerEndpoint, peerEndpointError = getPeerEndpoint()
+	validatorStreamAddress = getValidatorStreamAddress()
 
 	syncStateSnapshotChannelSize = viper.GetInt("peer.sync.state.snapshot.channelSize")
 	syncStateDeltasChannelSize = viper.GetInt("peer.sync.state.deltas.channelSize")
-	syncBlocksChannelSize = viper.GetInt("peer.sync.blocks.channelSize")
 	validatorEnabled = viper.GetBool("peer.validator.enabled")
+	tlsEnabled = viper.GetBool("peer.tls.enabled")
 
 	securityEnabled = viper.GetBool("security.enabled")
 
@@ -121,18 +137,24 @@ func CacheConfiguration() (err error) {
 // cacheConfiguration logs an error if error checks have failed.
 func cacheConfiguration() {
 	if err := CacheConfiguration(); err != nil {
-		peerLogger.Errorf("Execution continues after CacheConfiguration() failure : %s", err)
+		peerLogger.Error("Execution continues after CacheConfiguration() failure : $s", err)
 	}
 }
 
 //Functional forms
 
-// GetLocalAddress returns the peer.address property
 func GetLocalAddress() (string, error) {
 	if !configurationCached {
 		cacheConfiguration()
 	}
 	return localAddress, localAddressError
+}
+
+func getValidatorStreamAddress() string {
+	if !configurationCached {
+		cacheConfiguration()
+	}
+	return validatorStreamAddress
 }
 
 func GetPeerEndpoint() (*pb.PeerEndpoint, error) {
@@ -142,7 +164,6 @@ func GetPeerEndpoint() (*pb.PeerEndpoint, error) {
 	return peerEndpoint, peerEndpointError
 }
 
-// SyncStateSnapshotChannelSize returns the peer.sync.state.snapshot.channelSize property
 func SyncStateSnapshotChannelSize() int {
 	if !configurationCached {
 		cacheConfiguration()
@@ -150,7 +171,6 @@ func SyncStateSnapshotChannelSize() int {
 	return syncStateSnapshotChannelSize
 }
 
-// SyncStateDeltasChannelSize returns the peer.sync.state.deltas.channelSize property
 func SyncStateDeltasChannelSize() int {
 	if !configurationCached {
 		cacheConfiguration()
@@ -158,20 +178,18 @@ func SyncStateDeltasChannelSize() int {
 	return syncStateDeltasChannelSize
 }
 
-// SyncBlocksChannelSize returns the peer.sync.blocks.channelSize property
-func SyncBlocksChannelSize() int {
-	if !configurationCached {
-		cacheConfiguration()
-	}
-	return syncBlocksChannelSize
-}
-
-// ValidatorEnabled returns the peer.validator.enabled property
 func ValidatorEnabled() bool {
 	if !configurationCached {
 		cacheConfiguration()
 	}
 	return validatorEnabled
+}
+
+func TlsEnabled() bool {
+	if !configurationCached {
+		cacheConfiguration()
+	}
+	return tlsEnabled
 }
 
 func SecurityEnabled() bool {
